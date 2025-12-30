@@ -40,18 +40,18 @@ for subjdir in "$DICOM_ROOT"/*; do
     echo "Processing subject: $subj"
     echo "========================================"
 
-    apptainer run --cleanenv \
-      -B "$DICOM_ROOT":/dicom \
-      -B "$BIDS_ROOT":/bids \
-      -B "$HEURISTIC":/heuristic.py \
-      "$HEUDICONV_IMG" \
-        -d /dicom/{subject}/ses-{session}/*/*dcm \
-        -s "$subj" \
-        -ss "$SESSION" \
-        -f /heuristic.py \
-        -c dcm2niix \
-        -b \
-        -o /bids
+  apptainer run --cleanenv \
+    -B "$DICOM_ROOT":/dicom \
+    -B "$BIDS_ROOT":/bids \
+    -B "$HEURISTIC":/heuristic.py \
+    "$HEUDICONV_IMG" \
+      -d /dicom/{subject}/ses-{session}/*/*.dcm \
+      -s "$subj" \
+      -ss "$SESSION" \
+      -f /heuristic.py \
+      -c dcm2niix \
+      -b \
+      -o /bids
 done
 
 echo "All subjects processed."
