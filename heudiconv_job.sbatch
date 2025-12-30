@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=heudiconv
-#SBATCH --partition=ckpt
-#SBATCH --account=fanglab
+#SBATCH --partition=ckpt-all
+#SBATCH --account=fang
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
