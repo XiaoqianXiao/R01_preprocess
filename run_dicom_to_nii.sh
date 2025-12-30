@@ -8,20 +8,30 @@ set -euo pipefail
 HEUDICONV_SIF=/gscratch/scrubbed/fanglab/xiaoqian/containers/heudiconv.sif
 HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess/heuristic_reproin_like.py
 
-# Ensure these paths are correct on the host
-DICOM_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom
-BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
+# Paths on Host
+DICOM_INPUT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom
+BIDS_OUTPUT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 
 ############################
-# Safety checks
+# Safety checks & Path Resolution
 ############################
 
-mkdir -p "${BIDS_ROOT}"
+mkdir -p "${BIDS_OUTPUT}"
+
+# Resolve Symlinks (Crucial for Hyak/Singularity)
+# This converts /gscratch/... to /mmfs1/gscratch/... (or whatever the real path is)
+DICOM_ROOT=$(realpath "${DICOM_INPUT}")
+BIDS_ROOT=$(realpath "${BIDS_OUTPUT}")
+HEURISTIC_REAL=$(realpath "${HEURISTIC}")
 
 if [[ ! -f "${HEUDICONV_SIF}" ]]; then
   echo "ERROR: heudiconv.sif not found at: ${HEUDICONV_SIF}"
   exit 1
 fi
+
+echo "Detailed Path Info:"
+echo "  DICOM Input (Physical): ${DICOM_ROOT}"
+echo "  BIDS Output (Physical): ${BIDS_ROOT}"
 
 ############################
 # Main loop
@@ -33,7 +43,7 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   # Only process directories
   [[ -d "${SUBJ_PATH}" ]] || continue
 
-  # Check for at least one ses-* directory to avoid wasting time
+  # Check for at least one ses-* directory
   if ! ls "${SUBJ_PATH}"/ses-* >/dev/null 2>&1; then
     echo "Skipping ${SUBJ}: no ses-* directories found"
     continue
@@ -44,27 +54,29 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   echo "========================================"
 
   # --- DEBUG STEP: Verify container visibility ---
-  # This runs 'ls' INSIDE the container to prove the path exists there.
+  # Now we check the EXACT path inside the container
   echo "DEBUG: Checking visibility inside container..."
   apptainer exec \
-    -B "${DICOM_ROOT}:/dicom:ro" \
+    -B "${DICOM_ROOT}" \
     "${HEUDICONV_SIF}" \
-    ls -d /dicom/${SUBJ}/ses-* | head -1 || echo "ERROR: Container cannot see subject folder!"
+    ls -d "${SUBJ_PATH}/ses-"* | head -1 || echo "ERROR: Container still cannot see subject folder!"
 
   # --- HEUDICONV COMMAND ---
-  # Template explanation: /dicom/{subject}/{session}/[SeriesDir]/[DicomDir]/[Files]
+  # Updates:
+  # 1. Binds the exact paths (no colon renaming)
+  # 2. Uses the real full path in the -d template
   apptainer exec \
-    -B "${DICOM_ROOT}:/dicom:ro" \
-    -B "${BIDS_ROOT}:/bids" \
-    -B $HEURISTIC:/heuristic.py \
+    -B "${DICOM_ROOT}" \
+    -B "${BIDS_ROOT}" \
+    -B "${HEURISTIC_REAL}:/heuristic.py" \
     "${HEUDICONV_SIF}" \
     heudiconv \
-      -d "/dicom/{subject}/{session}/*/*/*.dcm" \
+      -d "${DICOM_ROOT}/{subject}/{session}/*/*/*.dcm" \
       -s "${SUBJ}" \
       -f /heuristic.py \
       -c dcm2niix \
       -b \
-      -o /bids \
+      -o "${BIDS_ROOT}" \
       --overwrite
 
 done
