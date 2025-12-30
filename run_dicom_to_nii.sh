@@ -31,7 +31,7 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
     -B "${HEURISTIC}:/heuristic.py:ro" \
     "${HEUDICONV_SIF}" \
     heudiconv \
-      -d /dicom/{subject}/{session}/*/*.dcm \
+      -d /dicom/{subject}/{session}/*/*/*.dcm \
       -s "${SUBJ}" \
       -f /heuristic.py \
       -c dcm2niix \
