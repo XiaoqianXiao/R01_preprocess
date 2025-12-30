@@ -30,7 +30,7 @@ def infotodict(seqinfo):
         
         # NOTE: We use 'ses-{session}' here. 
         # The Bash script MUST pass a clean ID (e.g., '01') for this to work.
-        filename_parts = ['sub-{subject}', 'ses-{session}']
+        filename_parts = ['sub-{subject}', '{session}']
         
         for entity_key in bids_order:
             if entity_key in entities:
@@ -40,7 +40,7 @@ def infotodict(seqinfo):
         filename_parts.append(suffix)
         filename_base = '_'.join(filename_parts)
         
-        out_template = f'sub-{{subject}}/ses-{{session}}/{datatype}/{filename_base}'
+        out_template = f'sub-{{subject}}/{{session}}/{datatype}/{filename_base}'
         
         key = create_key(out_template)
         if key not in info: info[key] = []
