@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMG=heudiconv.sif
+IMG=/gscratch/scrubbed/fanglab/xiaoqian/containers/heudiconv.sif
 
 DICOM_ROOT=/gscratch/fang/IFOCUS/sourcedata/dicom
 BIDS_ROOT=/gscratch/fang/IFOCUS/bids
