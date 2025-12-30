@@ -8,8 +8,8 @@ set -euo pipefail
 HEUDICONV_SIF=/gscratch/scrubbed/fanglab/xiaoqian/containers/heudiconv.sif
 HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess/heuristic_reproin_like.py
 
-DICOM_ROOT=/gscratch/fang/IFOCUS/sourcedata/dicom
-BIDS_ROOT=/gscratch/fang/IFOCUS/sourcedata/nii
+DICOM_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom
+BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 
 ############################
 # Safety checks
