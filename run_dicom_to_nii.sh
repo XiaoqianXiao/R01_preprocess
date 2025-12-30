@@ -23,12 +23,6 @@ if [[ ! -f "${HEUDICONV_SIF}" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${HEURISTIC}" ]]; then
-  echo "ERROR: heuristic file not found:"
-  echo "  ${HEURISTIC}"
-  exit 1
-fi
-
 ############################
 # Main loop
 ############################
