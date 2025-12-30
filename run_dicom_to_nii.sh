@@ -2,7 +2,16 @@
 set -euo pipefail
 
 # ----------------------------
-# Paths (EDIT ONLY IF NEEDED)
+# Apptainer temp/cache (FIX)
+# ----------------------------
+export APPTAINER_TMPDIR=/gscratch/scrubbed/fanglab/xiaoqian/apptainer/tmp
+export APPTAINER_CACHEDIR=/gscratch/scrubbed/fanglab/xiaoqian/apptainer/cache
+export TMPDIR=/gscratch/scrubbed/fanglab/xiaoqian/apptainer/tmp
+
+mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
+
+# ----------------------------
+# Paths
 # ----------------------------
 HEUDICONV_IMG=/gscratch/scrubbed/fanglab/xiaoqian/containers/heudiconv.sif
 DICOM_ROOT=/gscratch/fang/IFOCUS/sourcedata/dicom
@@ -11,24 +20,19 @@ HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess/heuristic_repr
 SESSION=pilotTR1500
 
 # ----------------------------
-# One-time container pull
+# Pull container (once)
 # ----------------------------
 if [ ! -f "$HEUDICONV_IMG" ]; then
     apptainer pull "$HEUDICONV_IMG" docker://nipy/heudiconv:latest
 fi
 
-# ----------------------------
-# Create output directory
-# ----------------------------
 mkdir -p "$BIDS_ROOT"
 
 # ----------------------------
-# Loop over subjects safely
+# Loop subjects
 # ----------------------------
 for subjdir in "$DICOM_ROOT"/*; do
     subj=$(basename "$subjdir")
-
-    # skip non-directories
     [ -d "$subjdir" ] || continue
 
     echo "========================================"
@@ -48,7 +52,6 @@ for subjdir in "$DICOM_ROOT"/*; do
         -c dcm2niix \
         -b \
         -o /bids
-
 done
 
 echo "All subjects processed."
