@@ -52,9 +52,6 @@ for SES_PATH in "${SUBJ_PATH}"/ses-*; do
     # ROBUST FIX: Strip 'ses-' prefix if present
     # This works even if sed fails or behaves oddly
     SES=${SES_RAW#ses-} 
-    
-    # Double check: if it still starts with ses-, strip it again (handles ses-ses- error)
-    SES=${SES#ses-}
 
     echo "  -> Raw folder: ${SES_RAW}"
     echo "  -> Clean Session ID: ${SES}"
