@@ -49,13 +49,14 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   echo "Processing subject: ${SUBJ}"
   echo "========================================"
 
-  singularity exec \
+
+  apptainer exec \
     -B "${DICOM_ROOT}:/dicom:ro" \
     -B "${BIDS_ROOT}:/bids" \
     -B $HEURISTIC:/heuristic.py \
     "${HEUDICONV_SIF}" \
     heudiconv \
-      -d /dicom/{subject}/{session}/*/*.dcm \
+      -d /dicom/{subject}/{session}/*/*.dicom \
       -s "${SUBJ}" \
       -f /heuristic.py \
       -c dcm2niix \

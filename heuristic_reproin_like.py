@@ -44,14 +44,43 @@ def infotodict(seqinfo):
 
         # ---------- ANAT ----------
         if pname.startswith('anat-t1w'):
-            info[t1w].append(s.series_id)
+            parts = pname.split('_')[1:]  # Skip 'anat-t1w'
+            kwargs = {'item': s.series_id}
+            for part in parts:
+                if part.startswith('acq-'):
+                    kwargs['acq'] = part[4:].replace(' ', '')  # Remove spaces if any
+                elif part.startswith('rec-'):
+                    kwargs['rec'] = part[4:]
+                elif part.startswith('run-'):
+                    kwargs['run'] = part[4:]
+            info[t1w].append(kwargs)
 
         # ---------- FUNC ----------
         elif pname.startswith('func-bold'):
-            info[bold].append(s.series_id)
+            parts = pname.split('_')[1:]  # Skip 'func-bold'
+            kwargs = {'item': s.series_id}
+            for part in parts:
+                if part.startswith('task-'):
+                    kwargs['task'] = part[5:]
+                elif part.startswith('acq-'):
+                    kwargs['acq'] = part[4:]
+                elif part.startswith('dir-'):
+                    kwargs['dir'] = part[4:]
+                elif part.startswith('run-'):
+                    kwargs['run'] = part[4:]
+            info[bold].append(kwargs)
 
         # ---------- FMAP ----------
         elif pname.startswith('fmap-epi'):
-            info[fmap_epi].append(s.series_id)
+            parts = pname.split('_')[1:]  # Skip 'fmap-epi'
+            kwargs = {'item': s.series_id}
+            for part in parts:
+                if part.startswith('acq-'):
+                    kwargs['acq'] = part[4:]
+                elif part.startswith('dir-'):
+                    kwargs['dir'] = part[4:]
+                elif part.startswith('run-'):
+                    kwargs['run'] = part[4:]
+            info[fmap_epi].append(kwargs)
 
     return info
