@@ -44,6 +44,19 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   echo "Processing subject: ${SUBJ}"
   echo "========================================"
 
+  # Unzip any .dicom.zip files in series directories
+  for ses_path in "${SUBJ_PATH}"/ses-*; do
+    [[ -d "${ses_path}" ]] || continue
+    for series_path in "${ses_path}"/*; do
+      [[ -d "${series_path}" ]] || continue
+      for zipfile in "${series_path}"/*.dicom.zip; do
+        if [[ -f "${zipfile}" ]]; then
+          echo "Unzipping ${zipfile}"
+          unzip -n "${zipfile}" -d "${series_path}"
+        fi
+      done
+    done
+  done
 
   # Diagnostic: List files in a sample series dir (pick first func-bold* if exists, else any)
   SAMPLE_SERIES=$(ls -d "${SUBJ_PATH}"/ses-*/func-bold* 2>/dev/null | head -1)
@@ -51,15 +64,15 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
     SAMPLE_SERIES=$(ls -d "${SUBJ_PATH}"/ses-*/* 2>/dev/null | head -1)
   fi
   if [[ -n "${SAMPLE_SERIES}" ]]; then
-    echo "Diagnostic: Files in sample series ${SAMPLE_SERIES}:"
-    ls -l "${SAMPLE_SERIES}"
+    echo "Diagnostic: Recursive files in sample series ${SAMPLE_SERIES}:"
+    ls -lR "${SAMPLE_SERIES}" | head -20
   else
     echo "Diagnostic: No series directories found"
   fi
 
   # Diagnostic: Count files that would match the glob
-  FILE_COUNT=$(find "${SUBJ_PATH}"/ses-*/* -type f 2>/dev/null | wc -l)
-  echo "Diagnostic: Total files in all series dirs: ${FILE_COUNT}"
+  FILE_COUNT=$(find "${SUBJ_PATH}"/ses-*/*/* -type f 2>/dev/null | wc -l)
+  echo "Diagnostic: Total files in all nested series dirs: ${FILE_COUNT}"
   if [[ ${FILE_COUNT} -eq 0 ]]; then
     echo "Warning: No files found post-unzip; check zip contents manually with 'zipinfo <file.dicom.zip>'"
   fi
@@ -70,7 +83,7 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
     -B $HEURISTIC:/heuristic.py \
     "${HEUDICONV_SIF}" \
     heudiconv \
-      -d /dicom/{subject}/{session}/*/* \
+      -d /dicom/{subject}/{session}/*/*/* \
       -s "${SUBJ}" \
       -f /heuristic.py \
       -c dcm2niix \
