@@ -44,7 +44,7 @@ for SUBJ_PATH in "${DICOM_INPUT}"/*; do
   echo "========================================"
 
   singularity exec \
-    -B "${BIDS_INPUT}:/dicom:ro" \
+    -B "${DICOM_INPUT}:/dicom:ro" \
     -B "${BIDS_OUTPUT}:/bids" \
     "${HEUDICONV_SIF}" \
     heudiconv \
