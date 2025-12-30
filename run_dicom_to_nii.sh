@@ -44,19 +44,6 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   echo "Processing subject: ${SUBJ}"
   echo "========================================"
 
-  # Unzip any .dicom.zip files in series directories
-  for ses_path in "${SUBJ_PATH}"/ses-*; do
-    [[ -d "${ses_path}" ]] || continue
-    for series_path in "${ses_path}"/*; do
-      [[ -d "${series_path}" ]] || continue
-      for zipfile in "${series_path}"/*.dicom.zip; do
-        if [[ -f "${zipfile}" ]]; then
-          echo "Unzipping ${zipfile}"
-          unzip -n "${zipfile}" -d "${series_path}"
-        fi
-      done
-    done
-  done
 
   # Diagnostic: List files in a sample series dir (pick first func-bold* if exists, else any)
   SAMPLE_SERIES=$(ls -d "${SUBJ_PATH}"/ses-*/func-bold* 2>/dev/null | head -1)
