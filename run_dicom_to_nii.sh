@@ -46,6 +46,7 @@ for SUBJ_PATH in "${DICOM_INPUT}"/*; do
   singularity exec \
     -B "${DICOM_INPUT}:/dicom:ro" \
     -B "${BIDS_OUTPUT}:/bids" \
+    -B ${HEURISTIC}:/HEURISTIC \
     "${HEUDICONV_SIF}" \
     heudiconv \
       -d /dicom/{subject}/{session}/*/*/*.dcm \
