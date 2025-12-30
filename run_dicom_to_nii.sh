@@ -18,34 +18,24 @@ BIDS_OUTPUT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 
 mkdir -p "${BIDS_OUTPUT}"
 
-# Resolve Symlinks (Crucial for Hyak/Singularity)
-# This converts /gscratch/... to /mmfs1/gscratch/... (or whatever the real path is)
-DICOM_ROOT=$(realpath "${DICOM_INPUT}")
-BIDS_ROOT=$(realpath "${BIDS_OUTPUT}")
-HEURISTIC_REAL=$(realpath "${HEURISTIC}")
-
-if [[ ! -f "${HEUDICONV_SIF}" ]]; then
-  echo "ERROR: heudiconv.sif not found at: ${HEUDICONV_SIF}"
-  exit 1
-fi
-
-echo "Detailed Path Info:"
-echo "  DICOM Input (Physical): ${DICOM_ROOT}"
-echo "  BIDS Output (Physical): ${BIDS_ROOT}"
-
 ############################
-# Main loop
+# Loop over subjects
 ############################
 
 for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   SUBJ=$(basename "${SUBJ_PATH}")
 
-  # Only process directories
   [[ -d "${SUBJ_PATH}" ]] || continue
 
-  # Check for at least one ses-* directory
+  # Only numeric subject IDs
+  if [[ ! "${SUBJ}" =~ ^[0-9]+$ ]]; then
+    echo "Skipping non-subject folder: ${SUBJ}"
+    continue
+  fi
+
+  # Must contain ses-* directories
   if ! ls "${SUBJ_PATH}"/ses-* >/dev/null 2>&1; then
-    echo "Skipping ${SUBJ}: no ses-* directories found"
+    echo "Skipping ${SUBJ}: no ses-* directories"
     continue
   fi
 
@@ -53,34 +43,19 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   echo "Processing subject: ${SUBJ}"
   echo "========================================"
 
-  # --- DEBUG STEP: Verify container visibility ---
-  # Now we check the EXACT path inside the container
-  echo "DEBUG: Checking visibility inside container..."
-  apptainer exec \
-    -B "${DICOM_ROOT}" \
-    "${HEUDICONV_SIF}" \
-    ls -d "${SUBJ_PATH}/ses-"* | head -1 || echo "ERROR: Container still cannot see subject folder!"
-
-  # --- HEUDICONV COMMAND ---
-  # Updates:
-  # 1. Binds the exact paths (no colon renaming)
-  # 2. Uses the real full path in the -d template
-  apptainer exec \
-    -B "${DICOM_ROOT}" \
-    -B "${BIDS_ROOT}" \
-    -B "${HEURISTIC_REAL}:/heuristic.py" \
+  singularity exec \
+    -B "${DICOM_ROOT}:/dicom:ro" \
+    -B "${BIDS_ROOT}:/bids" \
     "${HEUDICONV_SIF}" \
     heudiconv \
-      -d "${DICOM_ROOT}/{subject}/{session}/*/*/*.dcm" \
+      -d /dicom/{subject}/{session}/*/*/*.dcm \
       -s "${SUBJ}" \
-      -f /heuristic.py \
+      -f "${HEURISTIC}" \
       -c dcm2niix \
       -b \
-      -o "${BIDS_ROOT}" \
+      -o /bids \
       --overwrite
 
 done
 
-echo "========================================"
-echo "All subjects processed"
-echo "========================================"
+echo "All subjects finished"
