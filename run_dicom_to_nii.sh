@@ -22,7 +22,7 @@ mkdir -p "${BIDS_OUTPUT}"
 # Loop over subjects
 ############################
 
-for SUBJ_PATH in "${DICOM_ROOT}"/*; do
+for SUBJ_PATH in "${DICOM_INPUT}"/*; do
   SUBJ=$(basename "${SUBJ_PATH}")
 
   [[ -d "${SUBJ_PATH}" ]] || continue
@@ -44,8 +44,8 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   echo "========================================"
 
   singularity exec \
-    -B "${DICOM_ROOT}:/dicom:ro" \
-    -B "${BIDS_ROOT}:/bids" \
+    -B "${BIDS_INPUT}:/dicom:ro" \
+    -B "${BIDS_OUTPUT}:/bids" \
     "${HEUDICONV_SIF}" \
     heudiconv \
       -d /dicom/{subject}/{session}/*/*/*.dcm \
