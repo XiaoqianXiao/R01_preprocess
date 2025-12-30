@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH --job-name=heudiconv
-#SBATCH --partition=ckpt-all        # Change to your specific partition (e.g., ckpt, cpu-g2)
-#SBATCH --account=fang          # Change to your SLURM account
+#SBATCH --partition=ckpt
+#SBATCH --account=fanglab
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1          # HeuDiConv is mostly single-threaded
-#SBATCH --mem=8G                   # 8GB is usually plenty for dicom conversion
-#SBATCH --time=02:00:00            # 2 hours per subject (adjust if needed)
-#SBATCH --output=logs/%x_%A_%a.out # Standard output log (creates a logs/ folder)
-#SBATCH --error=logs/%x_%A_%a.err  # Standard error log
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8G
+#SBATCH --time=02:00:00
+#SBATCH --output=logs/%x_%A_%a.out
+#SBATCH --error=logs/%x_%A_%a.err
 
 # --- Configuration ---
 HEUDICONV_SIF=/gscratch/scrubbed/fanglab/xiaoqian/containers/heudiconv.sif
@@ -17,44 +17,36 @@ HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess/heuristic_repr
 DICOM_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom
 BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 
-# Load Apptainer (if not already in your path)
 module load apptainer 2>/dev/null || true
 
-# --- 1. Identify the specific subject for this task ---
-# Get a list of all subject folders (names only)
-# We use a bash array to map the SLURM_ARRAY_TASK_ID to a folder name
+# --- 1. Identify Subject ---
 subjects=( $(ls -d "${DICOM_ROOT}"/* | xargs -n 1 basename) )
-
-# Pick the subject corresponding to this job array index
 SUBJ=${subjects[$SLURM_ARRAY_TASK_ID]}
 SUBJ_PATH="${DICOM_ROOT}/${SUBJ}"
 
-# Check if the folder exists (safety check)
 if [ ! -d "${SUBJ_PATH}" ]; then
     echo "Error: Subject directory ${SUBJ_PATH} not found."
     exit 1
 fi
 
-echo "========================================"
-echo "Job ID     : ${SLURM_JOB_ID}"
-echo "Array Task : ${SLURM_ARRAY_TASK_ID}"
-echo "Processing : ${SUBJ}"
-echo "========================================"
+echo "Processing Subject: ${SUBJ}"
 
-# --- 2. Process all sessions for this subject ---
-# We loop sessions inside the job so one subject finishes completely in one job
+# --- 2. Process Sessions ---
 for SES_PATH in "${SUBJ_PATH}"/ses-*; do
     [[ -d "${SES_PATH}" ]] || continue
     
-    # Extract raw folder name (e.g., ses-pilotTR1500)
+    # 1. Get the folder name (e.g., "ses-pilotTR1500")
     SES_RAW=$(basename "${SES_PATH}")
     
-    # ROBUST FIX: Strip 'ses-' prefix if present
-    # This works even if sed fails or behaves oddly
-    SES=${SES_RAW#ses-} 
-
-    echo "  -> Raw folder: ${SES_RAW}"
-    echo "  -> Clean Session ID: ${SES}"
+    # 2. FORCE CLEANING: Use sed to remove 'ses-' from the start
+    # This turns "ses-pilotTR1500" into "pilotTR1500"
+    SES_CLEAN=$(echo "$SES_RAW" | sed 's/^ses-//')
+    
+    # 3. Debug Print (Check your .out log file if this fails!)
+    echo "  ------------------------------------------------"
+    echo "  Folder Found : ${SES_RAW}"
+    echo "  Session Arg  : ${SES_CLEAN}"  
+    echo "  ------------------------------------------------"
 
     apptainer exec \
       -B "${DICOM_ROOT}:/dicom:ro" \
@@ -64,12 +56,10 @@ for SES_PATH in "${SUBJ_PATH}"/ses-*; do
       heudiconv \
         -d '/dicom/{subject}/ses-{session}/*/*/*.dcm' \
         -s "${SUBJ}" \
-        -ss "${SES}" \
+        -ss "${SES_CLEAN}" \
         -f /heuristic.py \
         -c dcm2niix \
         -b \
         -o /bids \
         --overwrite
 done
-
-echo "Done with subject ${SUBJ}"
