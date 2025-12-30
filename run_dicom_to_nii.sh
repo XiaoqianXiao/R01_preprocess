@@ -4,7 +4,7 @@ set -euo pipefail
 IMG=/gscratch/scrubbed/fanglab/xiaoqian/containers/heudiconv.sif
 
 DICOM_ROOT=/gscratch/fang/IFOCUS/sourcedata/dicom
-BIDS_ROOT=/gscratch/fang/IFOCUS/bids
+BIDS_ROOT=/gscratch/fang/IFOCUS/sourcedata/nii
 HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess/heuristic_reproin_like.py
 
 for subj in $(ls $DICOM_ROOT); do
