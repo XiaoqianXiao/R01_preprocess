@@ -8,34 +8,31 @@ set -euo pipefail
 HEUDICONV_SIF=/gscratch/scrubbed/fanglab/xiaoqian/containers/heudiconv.sif
 HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess/heuristic_reproin_like.py
 
-# Paths on Host
-DICOM_INPUT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom
-BIDS_OUTPUT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
+# Host paths
+DICOM_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom
+BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 
 ############################
-# Safety checks & Path Resolution
+# Prep
 ############################
 
-mkdir -p "${BIDS_OUTPUT}"
+mkdir -p "${BIDS_ROOT}"
+
+echo "DICOM root : ${DICOM_ROOT}"
+echo "BIDS root  : ${BIDS_ROOT}"
 
 ############################
 # Loop over subjects
 ############################
 
-for SUBJ_PATH in "${DICOM_INPUT}"/*; do
+for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   SUBJ=$(basename "${SUBJ_PATH}")
 
   [[ -d "${SUBJ_PATH}" ]] || continue
 
-  # Only numeric subject IDs
-  if [[ ! "${SUBJ}" =~ ^[0-9]+$ ]]; then
-    echo "Skipping non-subject folder: ${SUBJ}"
-    continue
-  fi
-
-  # Must contain ses-* directories
+  # Require ses-* directories
   if ! ls "${SUBJ_PATH}"/ses-* >/dev/null 2>&1; then
-    echo "Skipping ${SUBJ}: no ses-* directories"
+    echo "Skipping ${SUBJ}: no ses-* directories found"
     continue
   fi
 
@@ -44,9 +41,9 @@ for SUBJ_PATH in "${DICOM_INPUT}"/*; do
   echo "========================================"
 
   singularity exec \
-    -B "${DICOM_INPUT}:/dicom:ro" \
-    -B "${BIDS_OUTPUT}:/bids" \
-    -B $HEURISTIC:/heuristic.py \
+    -B "${DICOM_ROOT}:/dicom:ro" \
+    -B "${BIDS_ROOT}:/bids" \
+    -B "${HEURISTIC}:/heuristic.py:ro" \
     "${HEUDICONV_SIF}" \
     heudiconv \
       -d /dicom/{subject}/{session}/*/*/*.dcm \
@@ -59,4 +56,4 @@ for SUBJ_PATH in "${DICOM_INPUT}"/*; do
 
 done
 
-echo "All subjects finished"
+echo "All subjects finished."
