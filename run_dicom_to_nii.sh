@@ -2,13 +2,14 @@
 set -euo pipefail
 
 # ----------------------------
-# Apptainer temp/cache (FIX)
+# Apptainer temp/cache
 # ----------------------------
 export APPTAINER_TMPDIR=/gscratch/scrubbed/fanglab/xiaoqian/apptainer/tmp
 export APPTAINER_CACHEDIR=/gscratch/scrubbed/fanglab/xiaoqian/apptainer/cache
 export TMPDIR=/gscratch/scrubbed/fanglab/xiaoqian/apptainer/tmp
 
 mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
+mkdir -p /gscratch/scrubbed/fanglab/xiaoqian/containers
 
 # ----------------------------
 # Paths
@@ -44,7 +45,6 @@ for subjdir in "$DICOM_ROOT"/*; do
       -B "$BIDS_ROOT":/bids \
       -B "$HEURISTIC":/heuristic.py \
       "$HEUDICONV_IMG" \
-      heudiconv \
         -d /dicom/{subject}/ses-{session}/*/*dcm \
         -s "$subj" \
         -ss "$SESSION" \
