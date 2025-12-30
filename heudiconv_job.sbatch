@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=heudiconv
-#SBATCH --partition=compute        # Change to your specific partition (e.g., ckpt, cpu-g2)
-#SBATCH --account=fanglab          # Change to your SLURM account
+#SBATCH --partition=ckpt-all        # Change to your specific partition (e.g., ckpt, cpu-g2)
+#SBATCH --account=fang          # Change to your SLURM account
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1          # HeuDiConv is mostly single-threaded
