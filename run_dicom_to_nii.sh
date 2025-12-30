@@ -13,9 +13,10 @@ echo "DICOM root : ${DICOM_ROOT}"
 echo "BIDS root  : ${BIDS_ROOT}"
 
 for SUBJ_PATH in "${DICOM_ROOT}"/*; do
-  SUBJ=$(basename "${SUBJ_PATH}")
   [[ -d "${SUBJ_PATH}" ]] || continue
+  SUBJ=$(basename "${SUBJ_PATH}")
 
+  # must contain at least one ses-* directory
   if ! ls "${SUBJ_PATH}"/ses-* >/dev/null 2>&1; then
     echo "Skipping ${SUBJ}: no ses-* directories"
     continue
@@ -25,13 +26,13 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   echo "Processing subject: ${SUBJ}"
   echo "========================================"
 
-  singularity exec \
+  apptainer exec \
     -B "${DICOM_ROOT}:/dicom:ro" \
     -B "${BIDS_ROOT}:/bids" \
     -B "${HEURISTIC}:/heuristic.py:ro" \
     "${HEUDICONV_SIF}" \
     heudiconv \
-      -d /dicom/{subject}/{session}/*/*/*.dcm \
+      -d '/dicom/{subject}/{session}/*/*/*.dcm' \
       -s "${SUBJ}" \
       -f /heuristic.py \
       -c dcm2niix \
