@@ -52,11 +52,12 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   singularity exec \
     -B "${DICOM_ROOT}:/dicom:ro" \
     -B "${BIDS_ROOT}:/bids" \
+    -B $HEURISTIC:/heuristic.py \
     "${HEUDICONV_SIF}" \
     heudiconv \
       -d /dicom/{subject}/{session}/*/*.dcm \
       -s "${SUBJ}" \
-      -f "${HEURISTIC}" \
+      -f /heuristic.py \
       -c dcm2niix \
       -b \
       -o /bids \
