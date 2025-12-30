@@ -33,11 +33,6 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   # Only process directories
   [[ -d "${SUBJ_PATH}" ]] || continue
 
-  # Skip non-subject folders (extra safety)
-  if [[ ! "${SUBJ}" =~ ^[0-9]+$ ]]; then
-    echo "Skipping non-numeric subject folder: ${SUBJ}"
-    continue
-  fi
 
   # Check for at least one ses-* directory
   if ! ls "${SUBJ_PATH}"/ses-* >/dev/null 2>&1; then
@@ -50,13 +45,32 @@ for SUBJ_PATH in "${DICOM_ROOT}"/*; do
   echo "========================================"
 
 
+  # Diagnostic: List files in a sample series dir (pick first func-bold* if exists, else any)
+  SAMPLE_SERIES=$(ls -d "${SUBJ_PATH}"/ses-*/func-bold* 2>/dev/null | head -1)
+  if [[ -z "${SAMPLE_SERIES}" ]]; then
+    SAMPLE_SERIES=$(ls -d "${SUBJ_PATH}"/ses-*/* 2>/dev/null | head -1)
+  fi
+  if [[ -n "${SAMPLE_SERIES}" ]]; then
+    echo "Diagnostic: Files in sample series ${SAMPLE_SERIES}:"
+    ls -l "${SAMPLE_SERIES}"
+  else
+    echo "Diagnostic: No series directories found"
+  fi
+
+  # Diagnostic: Count files that would match the glob
+  FILE_COUNT=$(find "${SUBJ_PATH}"/ses-*/* -type f 2>/dev/null | wc -l)
+  echo "Diagnostic: Total files in all series dirs: ${FILE_COUNT}"
+  if [[ ${FILE_COUNT} -eq 0 ]]; then
+    echo "Warning: No files found post-unzip; check zip contents manually with 'zipinfo <file.dicom.zip>'"
+  fi
+
   apptainer exec \
     -B "${DICOM_ROOT}:/dicom:ro" \
     -B "${BIDS_ROOT}:/bids" \
     -B $HEURISTIC:/heuristic.py \
     "${HEUDICONV_SIF}" \
     heudiconv \
-      -d /dicom/{subject}/{session}/*/*.dicom \
+      -d /dicom/{subject}/{session}/*/* \
       -s "${SUBJ}" \
       -f /heuristic.py \
       -c dcm2niix \
