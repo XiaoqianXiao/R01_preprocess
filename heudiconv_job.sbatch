@@ -45,9 +45,19 @@ echo "========================================"
 # We loop sessions inside the job so one subject finishes completely in one job
 for SES_PATH in "${SUBJ_PATH}"/ses-*; do
     [[ -d "${SES_PATH}" ]] || continue
-    SES=$(basename "${SES_PATH}" | sed 's/^ses-//')
+    
+    # Extract raw folder name (e.g., ses-pilotTR1500)
+    SES_RAW=$(basename "${SES_PATH}")
+    
+    # ROBUST FIX: Strip 'ses-' prefix if present
+    # This works even if sed fails or behaves oddly
+    SES=${SES_RAW#ses-} 
+    
+    # Double check: if it still starts with ses-, strip it again (handles ses-ses- error)
+    SES=${SES#ses-}
 
-    echo "  -> Found session: ${SES}"
+    echo "  -> Raw folder: ${SES_RAW}"
+    echo "  -> Clean Session ID: ${SES}"
 
     apptainer exec \
       -B "${DICOM_ROOT}:/dicom:ro" \
