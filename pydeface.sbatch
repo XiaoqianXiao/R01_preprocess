@@ -45,9 +45,10 @@ find "${SUBJ_DIR}" -name "*_T1w.nii.gz" | while read -r T1W_FILE; do
         # We only need to bind the data folder. 
         # PyDeface is now found automatically in the system path.
         apptainer exec \
-          -B "${BIDS_ROOT}" \
-          "$CONTAINER_SIF" \
-          pydeface "${T1W_FILE}" --outfile "${OUT_FILE}" --force
+            --pid \
+            -B "${BIDS_ROOT}" \
+            "$CONTAINER_SIF" \
+            pydeface "${T1W_FILE}" --outfile "${OUT_FILE}" --force
         
         echo "     [DONE] Created $(basename "${OUT_FILE}")"
     fi
