@@ -1,0 +1,23 @@
+Bootstrap: localimage
+From: /gscratch/scrubbed/fanglab/xiaoqian/containers/narsad.sif
+
+%environment
+    # Set up the environment variables every time the container runs
+    export DEBIAN_FRONTEND=noninteractive
+    export FSLDIR=/usr/local/fsl
+    export PATH=${FSLDIR}/bin:$PATH
+    export FSLOUTPUTTYPE=NIFTI_GZ
+
+%post
+    # --- Build Time Instructions ---
+    
+    # 1. Update pip to ensure we have the latest installer
+    #    (Using python3 explicitly to match the system python)
+    python3 -m pip install --upgrade pip
+
+    # 2. Install PyDeface
+    #    We install it globally so it is available in the system path
+    python3 -m pip install pydeface
+
+    # 3. Clean up to keep the image size down
+    rm -rf /root/.cache
