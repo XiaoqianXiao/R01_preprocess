@@ -58,6 +58,7 @@ echo "  -> Output Dir: ${DERIVS_DIR}/${SUBJ}"
 apptainer exec \
   -B "${BIDS_ROOT}" \
   -B "${LICENSE_FILE}:/opt/freesurfer/license.txt" \
+  -B "${DERIVS_DIR}" \
   "${CONTAINER_SIF}" \
   recon-all \
     -i "${INPUT_FILE}" \
