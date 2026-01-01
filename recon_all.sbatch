@@ -12,7 +12,7 @@
 
 # --- Configuration ---
 CONTAINER_SIF=/gscratch/scrubbed/fanglab/xiaoqian/containers/freesurfer.sif
-LICENSE_FILE=/gscratch/scrubbed/fanglab/xiaoqian/files/license.txt
+LICENSE_FILE=/gscratch/scrubbed/fanglab/xiaoqian/files/fs_license.txt
 
 # Directories
 BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
