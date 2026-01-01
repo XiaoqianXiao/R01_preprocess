@@ -50,7 +50,7 @@ echo "Processing Subject: ${SUBJ} (Label: ${SUBJ_LABEL})"
 # We bind the BIDS root, derivatives (for FS), and work dir
 apptainer run --cleanenv \
   -B "${BIDS_ROOT}:/data" \
-  -B "${DERIVS_ROOT}:/outputs" \
+  -B "${OUTPUT_DIR}:/outputs" \
   -B "${FS_SUBJECTS_DIR}:/fsdir" \
   -B "${WORK_DIR}:/work" \
   -B "${LICENSE_FILE}:/opt/freesurfer/license.txt" \
