@@ -59,6 +59,7 @@ apptainer exec \
   -B "${BIDS_ROOT}" \
   -B "${LICENSE_FILE}:/opt/freesurfer/license.txt" \
   -B "${DERIVS_DIR}" \
+  --env FS_LICENSE=/opt/freesurfer/license.txt \
   "${CONTAINER_SIF}" \
   recon-all \
     -i "${INPUT_FILE}" \
