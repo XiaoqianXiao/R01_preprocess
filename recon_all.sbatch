@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=recon-all
-#SBATCH --partition=cpu-g2
+#SBATCH --partition=check-all  #cpu-g2
 #SBATCH --account=fang
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
