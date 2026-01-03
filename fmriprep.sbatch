@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=fmriprep
-#SBATCH --partition=ckpt-all       # Use 'ckpt' or 'ckpt-all' or 'cpu-g2'
+#SBATCH --partition=cpu-g2       # Use 'ckpt' or 'ckpt-all' or 'cpu-g2'
 #SBATCH --account=fang             # Use your correct account
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
