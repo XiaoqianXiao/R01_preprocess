@@ -48,6 +48,15 @@ fi
 echo "  -> Input: $(basename "${INPUT_FILE}")"
 echo "  -> Output Dir: ${DERIVS_DIR}/${SUBJ}"
 
+# --- Safety: Clear previous lock files ---
+# If a previous run crashed, these files prevent restart.
+if [ -d "${DERIVS_DIR}/${SUBJ}/scripts" ]; then
+    echo "Cleaning up potential lock files for ${SUBJ}..."
+    rm -f "${DERIVS_DIR}/${SUBJ}/scripts/IsRunning"*
+    rm -f "${DERIVS_DIR}/${SUBJ}/scripts/build-stamp.txt" # Optional: force version check update
+fi
+
+
 # --- 3. Run Recon-all ---
 # -i : Input NIfTI
 # -s : Subject ID (creates folder inside SD)
