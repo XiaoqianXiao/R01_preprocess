@@ -1,4 +1,4 @@
-cd /gscratch/fang/IFOCUS/sourcedata/dicom
+cd /gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom
 
 find . -name "*.dicom.zip" | while read z; do
   d=$(dirname "$z")
