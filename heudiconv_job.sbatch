@@ -11,7 +11,7 @@
 #SBATCH --error=logs/%x_%A_%a.err
 
 # --- Configuration ---
-HEUDICONV_SIF=/gscratch/scrubbed/fanglab/xiaoqian/containers/heudiconv.sif
+HEUDICONV_SIF=/gscratch/fang/images/heudiconv.sif
 HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess/heuristic_reproin_like.py
 
 DICOM_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom
