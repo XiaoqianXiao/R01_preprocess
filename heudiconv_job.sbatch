@@ -20,8 +20,16 @@ BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 module load apptainer 2>/dev/null || true
 
 # --- 1. Identify Subject ---
-subjects=( $(ls -d "${DICOM_ROOT}"/* | xargs -n 1 basename) )
-SUBJ=${subjects[$SLURM_ARRAY_TASK_ID]}
+# If TARGET_SUB is passed via --export, we use it. Otherwise, we use the array index.
+if [ ! -z "$TARGET_SUB" ]; then
+    SUBJ="$TARGET_SUB"
+    echo "Running in MANUAL mode for Subject: ${SUBJ}"
+else
+    subjects=( $(ls -d "${DICOM_ROOT}"/* | xargs -n 1 basename) )
+    SUBJ=${subjects[$SLURM_ARRAY_TASK_ID]}
+    echo "Running in ARRAY mode for Subject: ${SUBJ} (Index: ${SLURM_ARRAY_TASK_ID})"
+fi
+
 SUBJ_PATH="${DICOM_ROOT}/${SUBJ}"
 
 if [ ! -d "${SUBJ_PATH}" ]; then
@@ -29,23 +37,27 @@ if [ ! -d "${SUBJ_PATH}" ]; then
     exit 1
 fi
 
-echo "Processing Subject: ${SUBJ}"
-
 # --- 2. Process Sessions ---
 for SES_PATH in "${SUBJ_PATH}"/ses-*; do
     [[ -d "${SES_PATH}" ]] || continue
     
-    # 1. Get the folder name (e.g., "ses-pilotTR1500")
     SES_RAW=$(basename "${SES_PATH}")
+
+    # If TARGET_SES is passed, skip any session that doesn't match
+    if [ ! -z "$TARGET_SES" ]; then
+        # Check if the raw folder matches 'ses-baseline' or just 'baseline'
+        if [[ "$SES_RAW" != "ses-$TARGET_SES" && "$SES_RAW" != "$TARGET_SES" ]]; then
+            continue
+        fi
+    fi
     
-    # 2. FORCE CLEANING: Use sed to remove 'ses-' from the start
-    # This turns "ses-pilotTR1500" into "pilotTR1500"
+    # FORCE CLEANING: Turn "ses-baseline" into "baseline"
     SES_CLEAN=$(echo "$SES_RAW" | sed 's/^ses-//')
     
-    # 3. Debug Print (Check your .out log file if this fails!)
     echo "  ------------------------------------------------"
-    echo "  Folder Found : ${SES_RAW}"
-    echo "  Session Arg  : ${SES_CLEAN}"  
+    echo "  Processing Subject : ${SUBJ}"
+    echo "  Folder Found       : ${SES_RAW}"
+    echo "  Session Arg        : ${SES_CLEAN}"  
     echo "  ------------------------------------------------"
 
     apptainer exec \
