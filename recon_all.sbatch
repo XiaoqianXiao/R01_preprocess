@@ -11,8 +11,8 @@
 #SBATCH --error=logs/recon_%x_%A_%a.err
 
 # --- Configuration ---
-CONTAINER_SIF=/gscratch/scrubbed/fanglab/xiaoqian/containers/freesurfer.sif
-LICENSE_FILE=/gscratch/scrubbed/fanglab/xiaoqian/files/fs_license.txt
+CONTAINER_SIF=/gscratch/fang/images/freesurfer.sif
+LICENSE_FILE=/mmfs1/home/xxqian/files/fs_license.txt
 
 # Directories
 BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii

@@ -12,7 +12,7 @@
 
 # --- Configuration ---
 # POINT TO YOUR NEW CONTAINER
-CONTAINER_SIF=/gscratch/scrubbed/fanglab/xiaoqian/containers/pydeface.sif
+CONTAINER_SIF=/gscratch/fang/images/pydeface.sif
 BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 
 module load apptainer 2>/dev/null || true

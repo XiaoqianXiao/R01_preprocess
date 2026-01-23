@@ -1,5 +1,5 @@
 Bootstrap: localimage
-From: /gscratch/scrubbed/fanglab/xiaoqian/containers/narsad.sif
+From: /gscratch/fang/images/narsad.sif
 
 %environment
     # Set up the environment variables every time the container runs
