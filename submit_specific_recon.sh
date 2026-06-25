@@ -3,7 +3,7 @@ BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 
 # 1. Define the subjects you want to re-run
 #    (Space-separated list)
-TARGETS=("sub-318" "sub-326" "sub-330")
+TARGETS=("sub-130" "sub-326" "sub-330")
 
 echo "Searching for indices for: ${TARGETS[*]}"
 

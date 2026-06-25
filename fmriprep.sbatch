@@ -1,18 +1,17 @@
 #!/bin/bash
 #SBATCH --job-name=fmriprep
-#SBATCH --partition=cpu-g2       # Use 'ckpt' or 'ckpt-all' or 'cpu-g2'
-#SBATCH --account=fang             # Use your correct account
+#SBATCH --partition=cpu-g2
+#SBATCH --account=fang
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8          # fMRIPrep needs good CPU power (8-16 is ideal)
-#SBATCH --mem=32G                  # 32GB is minimum recommended; use 48G or 64G if possible
-#SBATCH --time=24:00:00            # Can take 12-24h per subject
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=48G                  # Increased to 48G for better stability
+#SBATCH --time=24:00:00
 #SBATCH --output=logs/fmriprep_%x_%A_%a.out
 #SBATCH --error=logs/fmriprep_%x_%A_%a.err
 
 # --- Configuration ---
 CONTAINER_SIF=/gscratch/fang/images/fmriprep.sif
-# Note: Using the license path you provided in previous scripts
 LICENSE_FILE=/mmfs1/home/xxqian/files/fs_license.txt
 
 # Directories
@@ -22,32 +21,36 @@ FS_SUBJECTS_DIR="${DERIVS_ROOT}/freesurfer"
 OUTPUT_DIR="${DERIVS_ROOT}/fmriprep"
 WORK_DIR=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/work_fmriprep
 
-# Ensure directories exist
-mkdir -p "${OUTPUT_DIR}"
-mkdir -p "${WORK_DIR}"
-
-# Load Apptainer
+mkdir -p "${OUTPUT_DIR}" "${WORK_DIR}"
 module load apptainer 2>/dev/null || true
 
-# --- 1. Identify Subject ---
-subjects=( $(find "${BIDS_ROOT}" -maxdepth 1 -type d -name "sub-*" | sort | xargs -n 1 basename) )
-SUBJ=${subjects[$SLURM_ARRAY_TASK_ID]}
+# --- 1. Identify Target (Session-Level) ---
+# We find all session directories to process them as individual jobs
+targets=($(find "${BIDS_ROOT}" -maxdepth 2 -type d -name "ses-*" | sed "s|$BIDS_ROOT/||" | sort))
+CURRENT_TARGET=${targets[$SLURM_ARRAY_TASK_ID]} # e.g., sub-001/ses-01
 
-# fMRIPrep expects the label without "sub-" (e.g., "002" not "sub-002")
+SUBJ=$(echo "$CURRENT_TARGET" | cut -d'/' -f1)
+SES=$(echo "$CURRENT_TARGET" | cut -d'/' -f2)
 SUBJ_LABEL=${SUBJ#sub-}
 
-echo "Processing Subject: ${SUBJ} (Label: ${SUBJ_LABEL})"
+# --- 2. Map to Longitudinal FreeSurfer Output ---
+# This matches the folder name created in your Phase 3 Recon-all
+# e.g., sub-001_ses-01.long.sub-001_base
+FS_LONG_ID="${SUBJ}_${SES}.long.${SUBJ}_base"
 
-# --- 2. Run fMRIPrep ---
-# Explanation of Flags:
-# --participant-label: Specific subject to run
-# --fs-subjects-dir:  <CRITICAL> Points to your PRE-COMPUTED defaced FreeSurfer output
-# --output-spaces:    Standard output spaces (MNI152NLin2009cAsym is default standard)
-# --work-dir:         Scratch directory for intermediate files (speeds up resume)
-# --skip-bids-validation: Prevents minor BIDS naming issues from stopping the job
-# --stop-on-first-crash: Helpful for debugging
+echo "Processing Subject: ${SUBJ}, Session: ${SES}"
+echo "Using Longitudinal FS ID: ${FS_LONG_ID}"
 
-# We bind the BIDS root, derivatives (for FS), and work dir
+# Verify the FS folder exists before starting
+if [ ! -d "${FS_SUBJECTS_DIR}/${FS_LONG_ID}" ]; then
+    echo "ERROR: Longitudinal FreeSurfer folder ${FS_LONG_ID} not found!"
+    echo "Ensure Phase 3 of the longitudinal pipeline is complete."
+    exit 1
+fi
+
+# --- 3. Run fMRIPrep ---
+# Note: We use --fs-subject-id to force fMRIPrep to use the .long folder
+# We also add --bids-filter-file if you only want to process THIS session
 apptainer run --cleanenv \
   -B "${BIDS_ROOT}:/data" \
   -B "${OUTPUT_DIR}:/outputs" \
@@ -58,12 +61,14 @@ apptainer run --cleanenv \
   /data /outputs participant \
   --participant-label "${SUBJ_LABEL}" \
   --fs-subjects-dir /fsdir \
+  --fs-subject-id "${FS_LONG_ID}" \
+  --session-id "${SES#ses-}" \
   --work-dir /work \
   --output-spaces MNI152NLin2009cAsym:res-2 \
   --skip-bids-validation \
   --stop-on-first-crash \
-  --mem_mb 30000 \
+  --mem_mb 40000 \
   --nthreads 8 \
   --omp-nthreads 8
 
-echo "fMRIPrep finished for ${SUBJ}"
+echo "fMRIPrep finished for ${SUBJ} ${SES}"

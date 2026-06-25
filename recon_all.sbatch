@@ -1,68 +1,59 @@
 #!/bin/bash
 #SBATCH --job-name=recon-all
-#SBATCH --partition=cpu-g2  #ckpt-all
+#SBATCH --partition=cpu-g2
 #SBATCH --account=fang
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4          # FreeSurfer can use OpenMP (4 cores is sweet spot)
-#SBATCH --mem=12G                  # Recon-all needs ~8-10GB
-#SBATCH --time=32:00:00            # Recon-all takes 6-12 hours usually
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=12G
+#SBATCH --time=32:00:00
 #SBATCH --output=logs/recon_%x_%A_%a.out
 #SBATCH --error=logs/recon_%x_%A_%a.err
 
 # --- Configuration ---
 CONTAINER_SIF=/gscratch/fang/images/freesurfer.sif
 LICENSE_FILE=/mmfs1/home/xxqian/files/fs_license.txt
-
-# Directories
 BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 DERIVS_DIR=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/freesurfer
 mkdir -p "${DERIVS_DIR}"
 
-# Load Apptainer
 module load apptainer 2>/dev/null || true
 
-# --- 1. Identify Subject ---
-# Get list of subjects (e.g., sub-002)
-subjects=( $(find "${BIDS_ROOT}" -maxdepth 1 -type d -name "sub-*" | sort | xargs -n 1 basename) )
-SUBJ=${subjects[$SLURM_ARRAY_TASK_ID]}
-SUBJ_DIR="${BIDS_ROOT}/${SUBJ}"
+# --- 1. Identify Target (Subject/Session) ---
+# This gets the path like "sub-001/ses-01" from the array
+targets=($(find "${BIDS_ROOT}" -maxdepth 2 -type d -name "ses-*" | sed "s|$BIDS_ROOT/||" | sort))
+CURRENT_TARGET=${targets[$SLURM_ARRAY_TASK_ID]} # e.g., sub-001/ses-01
 
-if [ ! -d "${SUBJ_DIR}" ]; then
-    echo "Error: Subject directory ${SUBJ_DIR} not found."
-    exit 1
-fi
+# Extract Sub and Ses IDs for naming
+SUBJ=$(echo "$CURRENT_TARGET" | cut -d'/' -f1)
+SES=$(echo "$CURRENT_TARGET" | cut -d'/' -f2)
 
-echo "Processing Subject: ${SUBJ}"
+# Create a unique FreeSurfer ID (e.g., sub-001_ses-01)
+# This is critical for neuroimaging data management
+FS_ID="${SUBJ}_${SES}"
+TARGET_DIR="${BIDS_ROOT}/${CURRENT_TARGET}"
+
+echo "Processing Target: ${FS_ID}"
 
 # --- 2. Find the Defaced T1w Image ---
-# We look specifically for the file ending in _desc-defaced_T1w.nii.gz
-# This ensures we are using the 'faceless' input.
-INPUT_FILE=$(find "${SUBJ_DIR}" -name "*_desc-defaced_T1w.nii.gz" | head -n 1)
+# Restrict search ONLY to the specific session folder
+INPUT_FILE=$(find "${TARGET_DIR}" -name "*_desc-defaced_T1w.nii.gz" | head -n 1)
 
 if [ -z "${INPUT_FILE}" ]; then
-    echo "Error: No defaced T1w image found for ${SUBJ}. Run PyDeface first!"
+    echo "Error: No defaced T1w found in ${TARGET_DIR}. Check PyDeface output!"
     exit 1
 fi
 
 echo "  -> Input: $(basename "${INPUT_FILE}")"
-echo "  -> Output Dir: ${DERIVS_DIR}/${SUBJ}"
+echo "  -> Output Folder: ${DERIVS_DIR}/${FS_ID}"
 
-# --- Safety: Clear previous lock files ---
-# If a previous run crashed, these files prevent restart.
-if [ -d "${DERIVS_DIR}/${SUBJ}/scripts" ]; then
-    echo "Cleaning up potential lock files for ${SUBJ}..."
-    rm -f "${DERIVS_DIR}/${SUBJ}/scripts/IsRunning"*
-    rm -f "${DERIVS_DIR}/${SUBJ}/scripts/build-stamp.txt" # Optional: force version check update
+# --- 3. Safety Check: Clear lock files ---
+if [ -d "${DERIVS_DIR}/${FS_ID}/scripts" ]; then
+    echo "Cleaning up potential lock files for ${FS_ID}..."
+    rm -f "${DERIVS_DIR}/${FS_ID}/scripts/IsRunning"*
 fi
 
-
-# --- 3. Run Recon-all ---
-# -i : Input NIfTI
-# -s : Subject ID (creates folder inside SD)
-# -sd: Subjects Directory (where outputs go)
-# -all: Run the full pipeline
-# -parallel -openmp 4: Use 4 cores to speed it up
+# --- 4. Run Recon-all ---
 
 apptainer exec \
   -B "${BIDS_ROOT}" \
@@ -72,10 +63,10 @@ apptainer exec \
   "${CONTAINER_SIF}" \
   recon-all \
     -i "${INPUT_FILE}" \
-    -s "${SUBJ}" \
+    -s "${FS_ID}" \
     -sd "${DERIVS_DIR}" \
     -all \
     -parallel \
     -openmp 4
 
-echo "Recon-all completed for ${SUBJ}"
+echo "Finished ${FS_ID} at $(date)"
