@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+FW_KEY=
+
 IMAGE="/gscratch/fang/images/flywheel.sif"
 BIND_SRC="/gscratch/fang/IFOCUS/sourcedata/MRI"
 BIND_DEST="/DATA_DIR"
