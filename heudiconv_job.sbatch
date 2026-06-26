@@ -38,7 +38,7 @@ if [ ! -d "${SUBJ_PATH}" ]; then
 fi
 
 # --- 2. Process Sessions ---
-for SES_PATH in "${SUBJ_PATH}"/ses-*; do
+for SES_PATH in "${SUBJ_PATH}"/SESSIONS/ses-*; do
     [[ -d "${SES_PATH}" ]] || continue
     
     SES_RAW=$(basename "${SES_PATH}")
