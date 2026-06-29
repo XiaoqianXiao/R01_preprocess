@@ -30,6 +30,7 @@ mkdir -p "${OUTPUT_DIR}"
 apptainer exec \
   -B "${LICENSE_FILE}:/opt/freesurfer/license.txt" \
   -B "${DERIVS_DIR}" \
+  -B "/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/for3D" \
   --env FS_LICENSE=/opt/freesurfer/license.txt \
   "${CONTAINER_SIF}" \
   bash -c "
