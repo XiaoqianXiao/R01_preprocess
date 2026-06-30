@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=recon-all
-#SBATCH --partition=cpu-g2
-#SBATCH --account=fang
+#SBATCH --partition=cpu-g2-mem2x
+#SBATCH --account=psych
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
