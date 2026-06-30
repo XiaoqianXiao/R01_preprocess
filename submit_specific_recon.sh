@@ -15,20 +15,75 @@ CONTAINER_SIF=/gscratch/fang/images/freesurfer.sif
 LICENSE_FILE=/mmfs1/home/xxqian/files/fs_license.txt
 BIDS_ROOT="${BIDS_ROOT:-/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii}"
 DERIVS_DIR=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/freesurfer
+
+# --- Submit mode ---
+# If this script is run with bash from the login node, submit it to SLURM.
+# Examples:
+#   bash submit_specific_recon.sh sub-154/ses-baseline
+#   bash submit_specific_recon.sh sub-154
+#   bash submit_specific_recon.sh sub-154/ses-baseline sub-326/ses-baseline
+if [ -z "${SLURM_JOB_ID:-}" ]; then
+    if [ "$#" -lt 1 ]; then
+        echo "Usage:"
+        echo "  bash $0 sub-154/ses-baseline"
+        echo "  bash $0 sub-154"
+        echo "  bash $0 sub-154/ses-baseline sub-326/ses-baseline"
+        exit 1
+    fi
+
+    mkdir -p logs
+
+    submit_targets=()
+    for target in "$@"; do
+        if [[ "${target}" == */* ]]; then
+            if [ -d "${BIDS_ROOT}/${target}" ]; then
+                submit_targets+=("${target}")
+                echo "  -> Found ${target}"
+            else
+                echo "  [WARNING] Could not find ${target} in ${BIDS_ROOT}"
+            fi
+        elif [ -d "${BIDS_ROOT}/${target}" ]; then
+            while IFS= read -r session_dir; do
+                session_name=$(basename "${session_dir}")
+                submit_targets+=("${target}/${session_name}")
+                echo "  -> Found ${target}/${session_name}"
+            done < <(find "${BIDS_ROOT}/${target}" -maxdepth 1 -type d -name "ses-*" | sort)
+        else
+            echo "  [WARNING] Could not find ${target} in ${BIDS_ROOT}"
+        fi
+    done
+
+    if [ "${#submit_targets[@]}" -eq 0 ]; then
+        echo "No valid subject/session targets found. Exiting."
+        exit 1
+    fi
+
+    target_list=$(IFS=,; echo "${submit_targets[*]}")
+    array_end=$(("${#submit_targets[@]}" - 1))
+
+    echo "---------------------------------------------------"
+    echo "Submitting recon-all for: ${target_list}"
+    echo "SLURM array range: 0-${array_end}"
+    echo "---------------------------------------------------"
+
+    sbatch \
+        --array="0-${array_end}" \
+        --export=ALL,BIDS_ROOT="${BIDS_ROOT}",TARGETS="${target_list}" \
+        "$0"
+    exit $?
+fi
+
 mkdir -p "${DERIVS_DIR}" logs
 
 module load apptainer 2>/dev/null || true
 
 # --- 1. Identify Target (Subject/Session) ---
-# Normal full run:
-#   sbatch --array=0-N recon_all.sbatch
+# Full run:
+#   sbatch --array=0-N submit_specific_recon.sh
 #
-# Specific subject/session run:
-#   sbatch --array=0-0 --export=ALL,TARGETS=sub-154/ses-01 recon_all.sbatch
-#   sbatch --array=0-1 --export=ALL,TARGETS=sub-154/ses-01,sub-154/ses-02 recon_all.sbatch
-#
-# Or use:
-#   ./submit_recon_subjects.sh sub-154
+# Specific run:
+#   bash submit_specific_recon.sh sub-154/ses-baseline
+#   bash submit_specific_recon.sh sub-154
 
 if [ -n "${TARGETS:-}" ]; then
     IFS=, read -r -a targets <<< "${TARGETS}"
