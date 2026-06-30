@@ -1,9 +1,11 @@
 #!/bin/bash
-BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
+#BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
+BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii_for3D
 
 # 1. Define the subjects you want to re-run
 #    (Space-separated list)
-TARGETS=("sub-130" "sub-326" "sub-330")
+#TARGETS=("sub-130" "sub-326" "sub-330")
+TARGETS=("sub-154")
 
 echo "Searching for indices for: ${TARGETS[*]}"
 
