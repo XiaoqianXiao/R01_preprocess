@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- Set Defaults ---
-file_pattern="${file_pattern:-mriqc_36869418_*.out}"
+file_pattern="${file_pattern:-mriqc_36878451_*.out}"
 lines_to_check="${lines_to_check:-3}"
 search_term="${search_term:-completed}"
 
