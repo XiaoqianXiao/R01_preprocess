@@ -58,8 +58,8 @@ for fname in os.listdir(file_dir):
         continue
 
     print(modulID)
-    is_anat = ('T1w' in modulID) and ('RMS' in rms_ID)
-    is_func = ('bold' in modulID)
+    is_anat = 'T1w' in modulID
+    is_func = 'bold' in modulID
 
     target = anat_iqm if is_anat else func_iqm if is_func else None
 
@@ -132,11 +132,69 @@ print(func_df.head())
 df_structural = anat_df
 df_functional = func_df
 
+def numeric_column(df, column):
+    return pd.to_numeric(df[column], errors='coerce')
+
+
+def apply_thresholds(df, thresholds, label):
+    available_conditions = []
+    missing_metrics = []
+
+    for metric, rule in thresholds.items():
+        if metric not in df.columns:
+            missing_metrics.append(metric)
+            continue
+
+        values = numeric_column(df, metric)
+        operator = rule['operator']
+        threshold_value = rule['value']
+
+        if operator == '<':
+            available_conditions.append(values < threshold_value)
+        elif operator == '>':
+            available_conditions.append(values > threshold_value)
+        elif operator == '<=':
+            available_conditions.append(values <= threshold_value)
+        elif operator == '>=':
+            available_conditions.append(values >= threshold_value)
+        elif operator == 'between':
+            available_conditions.append((values >= threshold_value[0]) & (values <= threshold_value[1]))
+        elif operator == '~=':
+            available_conditions.append((values - threshold_value).abs() < 0.1)
+
+    if missing_metrics:
+        print(f"Skipping missing {label} metric(s): {', '.join(missing_metrics)}")
+
+    if not available_conditions:
+        return pd.Series(False, index=df.index)
+
+    return pd.concat(available_conditions, axis=1).any(axis=1)
+
+
 # Apply thresholds
 aqi_threshold = 0.2
-df_functional['gsr'] = df_functional[['gsr_x','gsr_y']].max(axis=1)
+if not df_functional.empty:
+    functional_conditions = []
+
+    if {'gsr_x', 'gsr_y'}.issubset(df_functional.columns):
+        df_functional['gsr'] = df_functional[['gsr_x', 'gsr_y']].apply(pd.to_numeric, errors='coerce').max(axis=1)
+        functional_conditions.append(numeric_column(df_functional, 'gsr') > 0.3)
+    else:
+        print("Skipping missing functional metric(s): gsr_x, gsr_y")
+
+    for metric, cutoff in {'fd_mean': 0.5, 'fd_perc': 50, 'aqi': aqi_threshold}.items():
+        if metric in df_functional.columns:
+            functional_conditions.append(numeric_column(df_functional, metric) > cutoff)
+        else:
+            print(f"Skipping missing functional metric: {metric}")
+
+    if functional_conditions:
+        df_functional['Poor_Quality'] = pd.concat(functional_conditions, axis=1).any(axis=1)
+    else:
+        df_functional['Poor_Quality'] = False
+else:
+    df_functional['Poor_Quality'] = False
 #df_functional['Poor_Quality'] = (df_functional['fd_mean'] > 0.5) | (df_functional['fd_perc'] > 50) | (df_functional['tsnr'] < 30) | (df_functional['aqi'] > aqi_threshold) | (df_functional['gsr'] > 0.3)
-df_functional['Poor_Quality'] = (df_functional['fd_mean'] > 0.5) | (df_functional['fd_perc'] > 50) | (df_functional['aqi'] > aqi_threshold) | (df_functional['gsr'] > 0.3)
 #%%
 ori_thresholds = {
     #'cjv': {'operator': '>', 'value': 0.1}, #Coefficient of Joint Variation
@@ -177,7 +235,13 @@ ori_thresholds = {
     #'wm2max': {'operator': 'between', 'value': (0.6, 0.8)} #White Matter to Maximum intensity ratio
 }
 #%%
-snr_gm_thresh = df_structural['snr_gm'].mean() - 2 * df_structural['snr_gm'].std()
+snr_gm_thresh = 15
+if 'snr_gm' in df_structural.columns:
+    snr_gm = numeric_column(df_structural, 'snr_gm')
+    if snr_gm.notna().any():
+        snr_gm_thresh = snr_gm.mean() - 2 * snr_gm.std()
+else:
+    print("Skipping data-driven snr_gm threshold because snr_gm is missing.")
 
 thresholds = {
     'cnr': {'operator': '<', 'value': 1.0}, #Contrast-to-Noise Ratio
@@ -193,31 +257,7 @@ thresholds = {
     #'snr_total': {'operator': '<', 'value': 10}
 }
 
-# Dynamically create exclusion criteria
-exclusion_criteria = []
-for metric, rule in thresholds.items():
-    operator = rule['operator']
-    value = rule['value']
-
-    if operator == '<':
-        exclusion_criteria.append(f"(df_structural['{metric}'] < {value})")
-    elif operator == '>':
-        exclusion_criteria.append(f"(df_structural['{metric}'] > {value})")
-    elif operator == '<=':
-        exclusion_criteria.append(f"(df_structural['{metric}'] <= {value})")
-    elif operator == '>=':
-        exclusion_criteria.append(f"(df_structural['{metric}'] >= {value})")
-    elif operator == 'between':
-        exclusion_criteria.append(f"((df_structural['{metric}'] >= {value[0]}) & (df_structural['{metric}'] <= {value[1]}))")
-    elif operator == '~=':
-        exclusion_criteria.append(f"(abs(df_structural['{metric}'] - {value}) < 0.1)")
-
-# Combine all criteria into a single exclusion condition
-exclusion_condition = " | ".join(exclusion_criteria)
-
-# Evaluate the exclusion condition
-excluded_column = eval(exclusion_condition)
-df_structural['Poor_Quality'] = excluded_column
+df_structural['Poor_Quality'] = apply_thresholds(df_structural, thresholds, 'structural')
 #%%
 # Extract excluded files
 n_poor_quality_func = df_functional.loc[df_functional['Poor_Quality']==True,'subID'].shape[0]
