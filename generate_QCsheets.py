@@ -198,7 +198,7 @@ else:
 #%%
 ori_thresholds = {
     #'cjv': {'operator': '>', 'value': 0.1}, #Coefficient of Joint Variation
-    'cnr': {'operator': '<', 'value': 1.0}, #Contrast-to-Noise Ratio
+    'cnr': {'operator': '<', 'value': 0.8}, #Contrast-to-Noise Ratio
     'efc': {'operator': '<=', 'value': 0.7}, #Entropy Focus Criterion
     #'fber': {'operator': '>=', 'value': 150}, #Foreground-to-Background Energy Ratio
     # 'fwhm_avg': {'operator': '>', 'value': 6.0}, #Full Width at Half Maximum (average)
@@ -244,7 +244,7 @@ else:
     print("Skipping data-driven snr_gm threshold because snr_gm is missing.")
 
 thresholds = {
-    'cnr': {'operator': '<', 'value': 1.0}, #Contrast-to-Noise Ratio
+    'cnr': {'operator': '<', 'value': 0.8}, #Contrast-to-Noise Ratio
     #'efc': {'operator': '<=', 'value': 0.7}, #Entropy Focus Criterion
     'qi_1': {'operator': '>=', 'value': 0.1}, #Quality Index 1 (Ghosting/Artifacts)
     'qi_2': {'operator': '>=', 'value': 0.2}, #Quality Index 2 (Motion artifacts, usually scanner-specific)
