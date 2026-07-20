@@ -48,7 +48,7 @@ JOBS="$6"
 
 fw login "${FW_KEY}"
 
-python - "$START_DATE" "$MANIFEST" "$PROJECT_PATH" <<'PY'
+python3 - "$START_DATE" "$MANIFEST" "$PROJECT_PATH" <<'PY'
 import csv
 from datetime import date, datetime
 import os
