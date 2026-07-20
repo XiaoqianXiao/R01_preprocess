@@ -67,7 +67,7 @@ for SES_PATH in "${SUBJ_PATH}"/ses-*; do
       -B "${HEURISTIC}:/heuristic.py:ro" \
       "${HEUDICONV_SIF}" \
       heudiconv \
-        -d '/dicom/{subject}/ses-{session}/*/*.dcm.zip' \
+        -d '/dicom/{subject}/ses-{session}/*/*.dicom' \
         -s "${SUBJ}" \
         -ss "${SES_CLEAN}" \
         -f /heuristic.py \
