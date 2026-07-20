@@ -28,6 +28,53 @@ The preprocessing pipeline consists of four main steps:
 
 ## Workflow Steps
 
+### Step 0: Download Recent DICOM Sessions from Flywheel
+
+Download raw DICOM sessions from Flywheel by session scan date on Hyak.
+
+**Script:** `download_bids_subjects_on_hyak_byTime.sh`
+
+**Usage:**
+```bash
+# Set your Flywheel API key for the current shell session
+export FW_KEY="uw-chn.flywheel.io:YOUR_API_KEY"
+
+# Preview sessions with session.timestamp on or after START_DATE.
+# This writes a manifest only; no data are downloaded.
+START_DATE=2026-06-22 LIST_ONLY=1 bash download_bids_subjects_on_hyak_byTime.sh
+
+# Download subject-specific tar files, then extract each successful download.
+START_DATE=2026-06-22 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
+```
+
+**What it does:**
+- Logs into Flywheel inside `/gscratch/fang/images/flywheel.sif`
+- Finds sessions in `fang-lab/IFOCUS` with `session.timestamp >= START_DATE`
+- Writes a manifest such as `/gscratch/fang/IFOCUS/sourcedata/MRI/sessions_since_2026-06-22.csv`
+- Downloads each matched session as `/gscratch/fang/IFOCUS/sourcedata/MRI/<subject>_<session>.tar`
+- Extracts each tar into `/gscratch/fang/IFOCUS/sourcedata/MRI/<subject>/<session>/`
+- Keeps the tar files by default for audit/retry purposes
+
+**Common options:**
+```bash
+# Download tar files only; do not extract
+EXTRACT_AFTER=0 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
+
+# Extract after download, then remove tar files
+KEEP_TARS=0 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
+
+# Change parallel download count
+JOBS=2 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
+
+# Change Flywheel project or destination if needed
+PROJECT_PATH="fang-lab/IFOCUS" BIND_SRC="/gscratch/fang/IFOCUS/sourcedata/MRI" bash download_bids_subjects_on_hyak_byTime.sh
+```
+
+**Notes:**
+- `fw sync --include` filters file types, not dates. This script queries sessions by date first, then downloads the matched sessions.
+- If the Apptainer image does not include the Flywheel Python SDK, the script installs `flywheel-sdk` under `/DATA_DIR/.python-userbase`.
+- Do not commit or paste real Flywheel API keys into scripts or documentation.
+
 ### Step 1: DICOM to BIDS Conversion
 
 Convert raw DICOM files to BIDS-compliant NIfTI format using heudiconv.
@@ -268,10 +315,12 @@ All scripts use hardcoded paths. Update the following variables in each script a
 - **BIDS_ROOT:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii`
 - **DICOM_ROOT:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom`
 - **DERIVS_DIR:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/`
+- **Flywheel download root:** `/gscratch/fang/IFOCUS/sourcedata/MRI`
 
 ## Script Files
 
 ### Main Workflow Scripts
+- `download_bids_subjects_on_hyak_byTime.sh` – Download Flywheel DICOM sessions by session date
 - `submit_dicom_to_nii.sh` – DICOM to BIDS conversion
 - `submit_pydeface.sh` – Defacing
 - `submit_recon.sh` – FreeSurfer cross-sectional

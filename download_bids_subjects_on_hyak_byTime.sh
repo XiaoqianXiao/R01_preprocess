@@ -24,7 +24,7 @@ IMAGE="${IMAGE:-/gscratch/fang/images/flywheel.sif}"
 BIND_SRC="${BIND_SRC:-/gscratch/fang/IFOCUS/sourcedata/MRI}"
 BIND_DEST="${BIND_DEST:-/DATA_DIR}"
 PROJECT_PATH="${PROJECT_PATH:-fang-lab/IFOCUS}"
-START_DATE="${START_DATE:-2026-06-22}"
+START_DATE="${START_DATE:-2026-06-01}"
 LIST_ONLY="${LIST_ONLY:-1}"
 JOBS="${JOBS:-4}"
 MANIFEST="${MANIFEST:-${BIND_DEST}/sessions_since_${START_DATE}.csv}"
@@ -196,6 +196,18 @@ download_and_extract() {
         mkdir -p "${extract_dir}"
         echo "Extracting ${tar_path} -> ${extract_dir}"
         tar -xf "${tar_path}" -C "${extract_dir}"
+
+        nested_dir="${extract_dir}/scitran/${download_path}"
+        if [[ -d "${nested_dir}" ]]; then
+            echo "Flattening ${nested_dir} -> ${extract_dir}"
+            shopt -s dotglob nullglob
+            nested_items=("${nested_dir}"/*)
+            if (( ${#nested_items[@]} > 0 )); then
+                mv "${nested_items[@]}" "${extract_dir}/"
+            fi
+            shopt -u dotglob nullglob
+            rm -rf "${extract_dir}/scitran"
+        fi
     fi
 
     if [[ "${KEEP_TARS}" == "0" ]]; then
