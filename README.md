@@ -66,6 +66,9 @@ KEEP_TARS=0 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
 # Change parallel download count
 JOBS=2 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
 
+# Try explicit CLI login before downloads, only if fw download reports an auth error
+RUN_FW_LOGIN=1 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
+
 # Change Flywheel project or destination if needed
 PROJECT_PATH="fang-lab/IFOCUS" BIND_SRC="/gscratch/fang/IFOCUS/sourcedata/MRI" bash download_bids_subjects_on_hyak_byTime.sh
 ```
@@ -73,6 +76,7 @@ PROJECT_PATH="fang-lab/IFOCUS" BIND_SRC="/gscratch/fang/IFOCUS/sourcedata/MRI" b
 **Notes:**
 - `fw sync --include` filters file types, not dates. This script queries sessions by date first, then downloads the matched sessions.
 - If the Apptainer image does not include the Flywheel Python SDK, the script installs `flywheel-sdk` under `/DATA_DIR/.python-userbase`.
+- The script skips `fw login` by default because that step can be killed by Hyak/Apptainer squashfuse cleanup; set `RUN_FW_LOGIN=1` only if downloads fail with an authentication error.
 - Do not commit or paste real Flywheel API keys into scripts or documentation.
 
 ### Step 1: DICOM to BIDS Conversion

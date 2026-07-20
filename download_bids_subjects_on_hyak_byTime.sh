@@ -12,6 +12,7 @@ set -euo pipefail
 # If the Apptainer image does not already include the Flywheel Python SDK,
 # this script installs it under /DATA_DIR/.python-userbase by default.
 # Set INSTALL_SDK=0 to fail instead of installing.
+# Set RUN_FW_LOGIN=1 only if fw download reports an authentication error.
 #
 # Notes:
 #   - fw sync --include only filters file types, not dates.
@@ -32,6 +33,7 @@ INSTALL_SDK="${INSTALL_SDK:-1}"
 PYTHONUSERBASE="${PYTHONUSERBASE:-${BIND_DEST}/.python-userbase}"
 EXTRACT_AFTER="${EXTRACT_AFTER:-1}"
 KEEP_TARS="${KEEP_TARS:-1}"
+RUN_FW_LOGIN="${RUN_FW_LOGIN:-0}"
 
 if [[ -z "${FW_KEY:-}" ]]; then
     echo "Error: FW_KEY is not set. Run: export FW_KEY='your_flywheel_api_key'" >&2
@@ -58,12 +60,17 @@ if [[ "${KEEP_TARS}" != "0" && "${KEEP_TARS}" != "1" ]]; then
     exit 1
 fi
 
+if [[ "${RUN_FW_LOGIN}" != "0" && "${RUN_FW_LOGIN}" != "1" ]]; then
+    echo "Error: RUN_FW_LOGIN must be 0 or 1." >&2
+    exit 1
+fi
+
 apptainer exec \
     --env FW_KEY="${FW_KEY}" \
     --env PYTHONUSERBASE="${PYTHONUSERBASE}" \
     -B "${BIND_SRC}:${BIND_DEST}" \
     "${IMAGE}" \
-    bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" "${INSTALL_SDK}" "${EXTRACT_AFTER}" "${KEEP_TARS}" <<'CONTAINER_SCRIPT'
+    bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" "${INSTALL_SDK}" "${EXTRACT_AFTER}" "${KEEP_TARS}" "${RUN_FW_LOGIN}" <<'CONTAINER_SCRIPT'
 set -euo pipefail
 
 START_DATE="$1"
@@ -75,6 +82,7 @@ JOBS="$6"
 INSTALL_SDK="$7"
 EXTRACT_AFTER="$8"
 KEEP_TARS="$9"
+RUN_FW_LOGIN="${10}"
 
 if ! python3 -c 'import flywheel' >/dev/null 2>&1; then
     if [[ "${INSTALL_SDK}" == "1" ]]; then
@@ -178,7 +186,11 @@ if [[ "${LIST_ONLY}" == "1" ]]; then
     exit 0
 fi
 
-fw login "${FW_KEY}"
+if [[ "${RUN_FW_LOGIN}" == "1" ]]; then
+    fw login "${FW_KEY}"
+else
+    echo "Skipping fw login; using existing Flywheel CLI auth or FW_KEY environment."
+fi
 
 download_and_extract() {
     download_path="$1"
