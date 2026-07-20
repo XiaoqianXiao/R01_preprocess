@@ -21,7 +21,8 @@ set -euo pipefail
 #   - Set DOWNLOAD_MODE=tar only if you specifically want to use fw download.
 
 IMAGE="${IMAGE:-/gscratch/fang/images/flywheel.sif}"
-BIND_SRC="${BIND_SRC:-/gscratch/fang/IFOCUS/sourcedata/MRI}"
+#BIND_SRC="${BIND_SRC:-/gscratch/fang/IFOCUS/sourcedata/MRI}"
+BIND_SRC="${BIND_SRC:-/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom}"
 BIND_DEST="${BIND_DEST:-/DATA_DIR}"
 PROJECT_PATH="${PROJECT_PATH:-fang-lab/IFOCUS}"
 START_DATE="${START_DATE:-2026-06-01}"

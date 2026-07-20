@@ -38,7 +38,8 @@ if [ ! -d "${SUBJ_PATH}" ]; then
 fi
 
 # --- 2. Process Sessions ---
-for SES_PATH in "${SUBJ_PATH}"/SESSIONS/ses-*; do
+#for SES_PATH in "${SUBJ_PATH}"/SESSIONS/ses-*; do
+for SES_PATH in "${SUBJ_PATH}"/ses-*; do
     [[ -d "${SES_PATH}" ]] || continue
     
     SES_RAW=$(basename "${SES_PATH}")
@@ -66,7 +67,7 @@ for SES_PATH in "${SUBJ_PATH}"/SESSIONS/ses-*; do
       -B "${HEURISTIC}:/heuristic.py:ro" \
       "${HEUDICONV_SIF}" \
       heudiconv \
-        -d '/dicom/{subject}/SESSIONS/ses-{session}/ACQUISITIONS/*/FILES/*/*.dcm' \
+        -d '/dicom/{subject}/ses-{session}/ACQUISITIONS/*/FILES/*/*.dcm' \
         -s "${SUBJ}" \
         -ss "${SES_CLEAN}" \
         -f /heuristic.py \
