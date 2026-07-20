@@ -1,15 +1,21 @@
 # R01 Preprocessing Workflow
 
-This repository contains scripts for preprocessing neuroimaging data from DICOM format through BIDS conversion, defacing, FreeSurfer reconstruction (longitudinal stream), and fMRIPrep. The workflow ensures all anatomical derivatives remain defaced and anatomically consistent across timepoints.
+This repository contains scripts for preprocessing neuroimaging data from DICOM format through BIDS conversion, MRIQC quality control, defacing, FreeSurfer reconstruction (longitudinal stream), and fMRIPrep. The workflow checks raw BIDS quality early, then ensures all anatomical derivatives remain defaced and anatomically consistent across timepoints.
 
 ## Overview
 
-The preprocessing pipeline consists of four main steps:
+The preprocessing pipeline consists of five main steps:
 
 1. **DICOM to NIfTI (BIDS format)** – Convert DICOMs to BIDS NIfTI using heudiconv
-2. **PyDeface** – Deface T1w images for privacy compliance
-3. **FreeSurfer Longitudinal Stream** – A three-phase process (Cross-sectional, Base, Longitudinal) to optimize multi-session data
-4. **fMRIPrep** – Preprocessing using pre-computed longitudinal FreeSurfer derivatives
+2. **MRIQC** – Generate anatomical and functional image quality metrics from BIDS NIfTI
+3. **PyDeface** – Deface T1w images for privacy compliance
+4. **FreeSurfer Longitudinal Stream** – A three-phase process (Cross-sectional, Base, Longitudinal) to optimize multi-session data
+5. **fMRIPrep** – Preprocessing using pre-computed longitudinal FreeSurfer derivatives
+
+FreeSurfer and fMRIPrep can run in either anatomical input mode:
+
+- `ANAT_MODE=defaced` (default): use `*_desc-defaced_T1w.nii.gz`, write FreeSurfer outputs to `derivatives/freesurfer`, and write fMRIPrep outputs to `derivatives/fmriprep`
+- `ANAT_MODE=original`: use the original `*_T1w.nii.gz`, write FreeSurfer outputs to `derivatives/freesurfer_original`, and write fMRIPrep outputs to `derivatives/fmriprep_original`
 
 ## Directory Structure
 
@@ -19,11 +25,19 @@ The preprocessing pipeline consists of four main steps:
 │   ├── dicom/          # Raw DICOM files
 │   └── nii/            # BIDS NIfTI (sub-*/ses-*/)
 └── derivatives/
+    ├── mriqc/         
+    │   ├── sub-*.html # MRIQC participant-level visual reports
+    │   ├── QC_anat.csv
+    │   ├── QC_func.csv
+    │   └── sum.json
+    ├── mriqc_work/    # Isolated MRIQC work directories by subject
     ├── freesurfer/     
     │   ├── sub-01_ses-01/               # Phase 1: Cross-sectional
     │   ├── sub-01_base/                 # Phase 2: Subject Template
     │   └── sub-01_ses-01.long.sub-01_base/ # Phase 3: Final Longitudinal
-    └── fmriprep/       # fMRIPrep outputs (sub-*/ses-*/)
+    ├── freesurfer_original/ # Optional non-defaced FreeSurfer outputs
+    ├── fmriprep/       # fMRIPrep outputs using defaced anatomy
+    └── fmriprep_original/ # Optional fMRIPrep outputs using original anatomy
 ```
 
 ## Workflow Steps
@@ -110,7 +124,41 @@ sbatch --export=ALL,TARGET_SUB="sub-001",TARGET_SES="ses-01" heudiconv_job.sbatc
 - DICOM root: `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom`
 - Heuristic: `heuristic_reproin_like.py`
 
-### Step 2: PyDeface
+### Step 2: MRIQC Quality Control
+
+Run MRIQC on the BIDS NIfTI data before defacing and downstream preprocessing. This provides participant-level anatomical and functional QC reports and summary CSV files that can be reviewed before investing cluster time in FreeSurfer and fMRIPrep.
+
+**Scripts:** `re_submit_mriqc.sh` (wraps `mriqc_job.sh`) and `run_qc_parser.sh` (wraps `generate_QCsheets.py`)
+
+**Usage:**
+```bash
+# Process all subjects
+./re_submit_mriqc.sh
+
+# Process one or more specific subjects
+./re_submit_mriqc.sh sub-001 sub-002
+
+# After MRIQC jobs finish, summarize IQMs into CSV/JSON reports
+sbatch run_qc_parser.sh
+```
+
+**What it does:**
+- Runs MRIQC 24.0.2 from `/gscratch/fang/images/mriqc_24.0.2.sif`
+- Scans BIDS input from `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii`
+- Writes participant reports and MRIQC outputs to `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/mriqc`
+- Uses isolated per-subject work directories under `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/mriqc_work/sub-XXX` to avoid multi-job work-directory conflicts
+- Runs with `--fd_thres 0.3`, `--verbose-reports`, and `--no-sub`
+- Parses generated HTML reports into `QC_anat.csv`, `QC_func.csv`, and `sum.json`
+
+**Review outputs:**
+```bash
+ls /gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/mriqc
+cat /gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/mriqc/sum.json
+```
+
+**Note:** The older `submit_mriqc.sh` submits all subjects as a Slurm array only. Prefer `re_submit_mriqc.sh` because it supports both all-subject and explicit subject-list submissions.
+
+### Step 3: PyDeface
 
 Deface T1w anatomical images to remove facial features for privacy compliance.
 
@@ -138,7 +186,7 @@ Deface T1w anatomical images to remove facial features for privacy compliance.
 ./check_miss_pydefaced_sessions.sh
 ```
 
-### Step 3: FreeSurfer Longitudinal Stream
+### Step 4: FreeSurfer Longitudinal Stream
 
 For datasets with multiple sessions, use the FreeSurfer longitudinal stream to reduce anatomical noise and prevent processing bias across timepoints.
 
@@ -148,20 +196,29 @@ For datasets with multiple sessions, use the FreeSurfer longitudinal stream to r
 
 **Usage:**
 ```bash
-# Process all sessions
+# Process all sessions with defaced T1w inputs (default)
 ./submit_recon.sh
 
-# Process specific subjects only
-./submit_specific_recon.sh
+# Process all sessions with original, non-defaced T1w inputs
+ANAT_MODE=original ./submit_recon.sh
+
+# Process a specific subject/session
+bash submit_specific_recon.sh sub-001/ses-01
+
+# Process all sessions for a specific subject
+bash submit_specific_recon.sh sub-001
+
+# Process specific subjects/sessions with original, non-defaced T1w inputs
+ANAT_MODE=original bash submit_specific_recon.sh sub-001/ses-01
 ```
-Edit the `TARGETS` array in `submit_specific_recon.sh` to specify which subjects to process (e.g., `TARGETS=("sub-130" "sub-326" "sub-330")`).
 
 **What it does:**
 - Processes every session independently
 - Creates folders named `sub-XXX_ses-YYY`
+- Uses `derivatives/freesurfer` for `ANAT_MODE=defaced` and `derivatives/freesurfer_original` for `ANAT_MODE=original`
 - Performs standard `recon-all` processing
 
-**Note:** `submit_recon.sh` processes all sessions. Use `submit_specific_recon.sh` for specific subjects only.
+**Note:** `submit_recon.sh` processes all sessions. Use `submit_specific_recon.sh` for specific subjects or sessions. `ANAT_MODE=defaced` requires PyDeface outputs to exist first; `ANAT_MODE=original` skips that requirement.
 
 #### Phase 2: Subject Base Template
 
@@ -169,19 +226,26 @@ Edit the `TARGETS` array in `submit_specific_recon.sh` to specify which subjects
 
 **Usage:**
 ```bash
-# Process all subjects
+# Process all subjects with defaced FreeSurfer derivatives (default)
 python submit_longitudinal.py
+
+# Process all subjects with original-anatomy FreeSurfer derivatives
+ANAT_MODE=original python submit_longitudinal.py
 ```
 
 **What it does:**
 - Creates an unbiased, subject-specific average template from all available sessions
 - Creates `sub-XXX_base` folders
+- Reads cross-sectional folders from the anatomy-mode-specific FreeSurfer directory
 - Automatically submits LONG jobs with dependencies after BASE completes
 
 **Note:** This script processes all subjects automatically. For specific subjects, you can modify the script or submit `long_stage.sbatch` directly:
 ```bash
 # Manual BASE submission for specific subject
 sbatch --export=ALL,STAGE=BASE,SUBID="sub-001",TPS="-tp sub-001_ses-01 -tp sub-001_ses-02" long_stage.sbatch
+
+# Manual BASE submission using original, non-defaced anatomy
+sbatch --export=ALL,ANAT_MODE=original,STAGE=BASE,SUBID="sub-001",TPS="-tp sub-001_ses-01 -tp sub-001_ses-02" long_stage.sbatch
 ```
 
 #### Phase 3: Longitudinal Run
@@ -192,6 +256,9 @@ sbatch --export=ALL,STAGE=BASE,SUBID="sub-001",TPS="-tp sub-001_ses-01 -tp sub-0
 ```bash
 # Process all subjects (automatically submitted after BASE)
 python submit_longitudinal.py
+
+# Process original-anatomy FreeSurfer longitudinal outputs
+ANAT_MODE=original python submit_longitudinal.py
 ```
 
 **What it does:**
@@ -204,15 +271,22 @@ python submit_longitudinal.py
 ```bash
 # Manual LONG submission for specific session (after BASE completes)
 sbatch --dependency=afterok:JOBID --export=ALL,STAGE=LONG,SUBID="sub-001",TP="sub-001_ses-01" long_stage.sbatch
+
+# Manual LONG submission using original, non-defaced anatomy
+sbatch --dependency=afterok:JOBID --export=ALL,ANAT_MODE=original,STAGE=LONG,SUBID="sub-001",TP="sub-001_ses-01" long_stage.sbatch
 ```
 
 **Verification:**
 ```bash
+# Check defaced FreeSurfer outputs
 ./check_freesurfer_status.sh
-```
-This script generates `freesurfer_longitudinal_status.csv` with status for all three phases (CROSS, BASE, LONG).
 
-### Step 4: fMRIPrep Preprocessing
+# Check original-anatomy FreeSurfer outputs
+ANAT_MODE=original ./check_freesurfer_status.sh
+```
+This script generates `freesurfer_longitudinal_status_defaced.csv` or `freesurfer_longitudinal_status_original.csv` with status for all three phases (CROSS, BASE, LONG).
+
+### Step 5: fMRIPrep Preprocessing
 
 Run fMRIPrep using the Phase 3 Longitudinal derivatives.
 
@@ -220,17 +294,25 @@ Run fMRIPrep using the Phase 3 Longitudinal derivatives.
 
 **Usage:**
 ```bash
-# Process all sessions
+# Process all sessions with defaced anatomy (default)
 ./submit_fmriprep.sh
+
+# Process all sessions with original, non-defaced anatomy
+ANAT_MODE=original ./submit_fmriprep.sh
 
 # Process specific session (manual submission)
 # First, find the array index for your session, then:
 sbatch --array=INDEX fmriprep.sbatch
+
+# Manual specific-session submission using original, non-defaced anatomy
+sbatch --array=INDEX --export=ALL,ANAT_MODE=original fmriprep.sbatch
 ```
 
 **What it does:**
 - Submits a job array for every session (rather than every subject)
 - Uses `--fs-subject-id` to point fMRIPrep specifically to the corresponding `.long` folder in the FreeSurfer directory
+- Uses a per-job BIDS filter file so `ANAT_MODE=defaced` selects `desc-defaced_T1w` and `ANAT_MODE=original` selects the plain original `T1w`
+- Writes original-anatomy outputs to `derivatives/fmriprep_original` so they do not overwrite defaced-anatomy outputs
 - Ensures anatomical consistency across sessions for functional alignment
 
 **Note:** `submit_fmriprep.sh` processes all sessions. For specific sessions, you need to:
@@ -239,22 +321,28 @@ sbatch --array=INDEX fmriprep.sbatch
 
 **Verification:**
 ```bash
+# Check defaced-anatomy fMRIPrep outputs
 ./check_fmriprep_status.sh
-```
-This script generates `fmriprep_status_report.csv` with completion status.
 
-**Critical Note:** This step must only be run after Phase 3 of FreeSurfer is complete for the target session.
+# Check original-anatomy fMRIPrep outputs
+ANAT_MODE=original ./check_fmriprep_status.sh
+```
+This script generates `fmriprep_status_report_defaced.csv` or `fmriprep_status_report_original.csv` with completion status.
+
+**Critical Note:** This step must only be run after Phase 3 of FreeSurfer is complete for the target session in the same `ANAT_MODE`.
 
 ## Workflow Summary
 
 ```mermaid
 graph TD
     A[DICOM Files] -->|heudiconv| B[BIDS NIfTI]
-    B -->|PyDeface| C[Defaced T1w]
-    C -->|Phase 1| D[Cross-Sectional FS]
-    D -->|Phase 2| E[Subject Base Template]
-    E -->|Phase 3| F[Longitudinal FS]
-    F -->|fMRIPrep| G[Preprocessed BOLD]
+    B -->|MRIQC| C[QC Reports and IQM Tables]
+    B -->|PyDeface| D[Defaced T1w]
+    C -. review before downstream processing .-> D
+    D -->|Phase 1| E[Cross-Sectional FS]
+    E -->|Phase 2| F[Subject Base Template]
+    F -->|Phase 3| G[Longitudinal FS]
+    G -->|fMRIPrep| H[Preprocessed BOLD]
 ```
 
 ## Specific Subject/Session Processing
@@ -264,28 +352,33 @@ Many scripts support processing specific subjects or sessions. Here's a summary:
 | Script | Specific Sub/Ses Support | Method |
 |--------|-------------------------|--------|
 | `submit_dicom_to_nii.sh` | ⚠️ Manual only | Submit `heudiconv_job.sbatch` directly with `--export=ALL,TARGET_SUB="sub-XXX"` |
+| `re_submit_mriqc.sh` | ✅ Yes | `./re_submit_mriqc.sh sub-001` or `./re_submit_mriqc.sh sub-001 sub-002` |
+| `submit_mriqc.sh` | ❌ No | Use `re_submit_mriqc.sh` instead |
 | `submit_pydeface.sh` | ✅ Yes | `./submit_pydeface.sh sub-001` or `./submit_pydeface.sh sub-001 ses-01` |
-| `submit_recon.sh` | ❌ No | Use `submit_specific_recon.sh` instead |
-| `submit_specific_recon.sh` | ✅ Yes | Edit `TARGETS` array in script |
-| `submit_longitudinal.py` | ⚠️ Manual only | Submit `long_stage.sbatch` directly with appropriate `--export` flags |
-| `submit_fmriprep.sh` | ⚠️ Manual only | Submit `fmriprep.sbatch` directly with `--array=INDEX` |
+| `submit_recon.sh` | ❌ No | Use `submit_specific_recon.sh` instead; supports `ANAT_MODE=defaced` or `ANAT_MODE=original` |
+| `submit_specific_recon.sh` | ✅ Yes | `ANAT_MODE=original bash submit_specific_recon.sh sub-001/ses-01` |
+| `submit_longitudinal.py` | ⚠️ Manual only | Submit `long_stage.sbatch` directly with appropriate `--export` flags; supports `ANAT_MODE=defaced` or `ANAT_MODE=original` |
+| `submit_fmriprep.sh` | ⚠️ Manual only | Submit `fmriprep.sbatch` directly with `--array=INDEX`; supports `ANAT_MODE=defaced` or `ANAT_MODE=original` |
 
 ## Utility Scripts
 
 ### Status Checking
 
 - **`check_freesurfer_status.sh`** – Check FreeSurfer processing status for all phases
-  - Outputs: `freesurfer_longitudinal_status.csv`
+  - Outputs: `freesurfer_longitudinal_status_defaced.csv` or `freesurfer_longitudinal_status_original.csv`
   - Checks for lock files, log completion, and required output files
 
 - **`check_fmriprep_status.sh`** – Check fMRIPrep completion status
-  - Outputs: `fmriprep_status_report.csv`
+  - Outputs: `fmriprep_status_report_defaced.csv` or `fmriprep_status_report_original.csv`
   - Verifies HTML reports, anatomical, functional, and confound outputs
 
 - **`check_miss_pydefaced_sessions.sh`** – List all defaced sessions
   - Shows which subject/session combinations have been defaced
 
 - **`check_error.sh`** – Check for errors in log files (if available)
+
+- **`run_qc_parser.sh`** – Parse MRIQC HTML reports into aggregate QC files
+  - Outputs: `derivatives/mriqc/QC_anat.csv`, `derivatives/mriqc/QC_func.csv`, and `derivatives/mriqc/sum.json`
 
 ### Data Management
 
@@ -302,6 +395,8 @@ Many scripts support processing specific subjects or sessions. Here's a summary:
 - **Dependency Issues:** The `submit_longitudinal.py` script uses Slurm dependencies. If the BASE job fails, the LONG jobs will be cancelled automatically.
 
 - **Naming Mismatches:** fMRIPrep requires the `--fs-subject-id` to match the folder name in your FreeSurfer directory exactly. If fMRIPrep fails to find anatomy, check the `FS_LONG_ID` variable in `fmriprep.sbatch`.
+
+- **Anatomy Mode Mismatches:** Use the same `ANAT_MODE` for cross-sectional FreeSurfer, longitudinal FreeSurfer, fMRIPrep, and status checks. For example, `ANAT_MODE=original` fMRIPrep expects longitudinal FreeSurfer outputs under `derivatives/freesurfer_original`.
 
 - **fsaverage:** If fsaverage is missing from the derivatives folder, the status script will alert you. fMRIPrep or FreeSurfer usually populates this automatically.
 
@@ -320,6 +415,12 @@ All scripts use hardcoded paths. Update the following variables in each script a
 - **BIDS_ROOT:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii`
 - **DICOM_ROOT:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom`
 - **DERIVS_DIR:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/`
+- **MRIQC output:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/mriqc`
+- **MRIQC work:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/mriqc_work`
+- **Defaced FreeSurfer output:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/freesurfer`
+- **Original-anatomy FreeSurfer output:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/freesurfer_original`
+- **Defaced-anatomy fMRIPrep output:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/fmriprep`
+- **Original-anatomy fMRIPrep output:** `/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/fmriprep_original`
 - **Flywheel download root:** `/gscratch/fang/IFOCUS/sourcedata/MRI`
 
 ## Script Files
@@ -327,6 +428,8 @@ All scripts use hardcoded paths. Update the following variables in each script a
 ### Main Workflow Scripts
 - `download_bids_subjects_on_hyak_byTime.sh` – Download Flywheel DICOM sessions by session date
 - `submit_dicom_to_nii.sh` – DICOM to BIDS conversion
+- `re_submit_mriqc.sh` – MRIQC submission for all subjects or specific subject lists
+- `submit_mriqc.sh` – MRIQC all-subject array submission
 - `submit_pydeface.sh` – Defacing
 - `submit_recon.sh` – FreeSurfer cross-sectional
 - `submit_specific_recon.sh` – FreeSurfer for specific subjects
@@ -335,6 +438,7 @@ All scripts use hardcoded paths. Update the following variables in each script a
 
 ### SBATCH Templates
 - `heudiconv_job.sbatch` – DICOM conversion job template
+- `mriqc_job.sh` – MRIQC participant-level job template
 - `pydeface.sbatch` – Defacing job template
 - `recon_all.sbatch` – FreeSurfer cross-sectional job template
 - `long_stage.sbatch` – FreeSurfer longitudinal job template
@@ -350,5 +454,7 @@ All scripts use hardcoded paths. Update the following variables in each script a
 - `check_miss_pydefaced_sessions.sh` – Defacing status checker
 - `check_error.sh` – Error log checker
 - `fix_intended_for.py` – Fix JSON sidecars
+- `generate_QCsheets.py` – Parse MRIQC HTML reports into QC CSV/JSON summaries
+- `run_qc_parser.sh` – Slurm wrapper for MRIQC summary generation
 - `verify_freesurfer.sh` – FreeSurfer verification
 - `unzip.sh` – File extraction utility

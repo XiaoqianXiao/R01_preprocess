@@ -17,9 +17,24 @@ LICENSE_FILE=/mmfs1/home/xxqian/files/fs_license.txt
 # Directories
 BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 DERIVS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives
-FS_SUBJECTS_DIR="${DERIVS_ROOT}/freesurfer"
-OUTPUT_DIR="${DERIVS_ROOT}/fmriprep"
-WORK_DIR=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/work_fmriprep
+ANAT_MODE="${ANAT_MODE:-defaced}"
+
+case "${ANAT_MODE}" in
+    defaced)
+        FS_SUBJECTS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer}"
+        OUTPUT_DIR="${FMRIPREP_OUTPUT_DIR:-${DERIVS_ROOT}/fmriprep}"
+        WORK_DIR="${FMRIPREP_WORK_DIR:-/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/work_fmriprep}"
+        ;;
+    original)
+        FS_SUBJECTS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer_original}"
+        OUTPUT_DIR="${FMRIPREP_OUTPUT_DIR:-${DERIVS_ROOT}/fmriprep_original}"
+        WORK_DIR="${FMRIPREP_WORK_DIR:-/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/work_fmriprep_original}"
+        ;;
+    *)
+        echo "ERROR: ANAT_MODE must be 'defaced' or 'original' (got '${ANAT_MODE}')"
+        exit 1
+        ;;
+esac
 
 mkdir -p "${OUTPUT_DIR}" "${WORK_DIR}"
 module load apptainer 2>/dev/null || true
@@ -39,7 +54,10 @@ SUBJ_LABEL=${SUBJ#sub-}
 FS_LONG_ID="${SUBJ}_${SES}.long.${SUBJ}_base"
 
 echo "Processing Subject: ${SUBJ}, Session: ${SES}"
+echo "Anatomical input mode: ${ANAT_MODE}"
 echo "Using Longitudinal FS ID: ${FS_LONG_ID}"
+echo "Using FreeSurfer directory: ${FS_SUBJECTS_DIR}"
+echo "Writing fMRIPrep outputs to: ${OUTPUT_DIR}"
 
 # Verify the FS folder exists before starting
 if [ ! -d "${FS_SUBJECTS_DIR}/${FS_LONG_ID}" ]; then
@@ -47,6 +65,40 @@ if [ ! -d "${FS_SUBJECTS_DIR}/${FS_LONG_ID}" ]; then
     echo "Ensure Phase 3 of the longitudinal pipeline is complete."
     exit 1
 fi
+
+BIDS_FILTER_HOST_FILE="${WORK_DIR}/bids_filter_${ANAT_MODE}_${SUBJ}_${SES}.json"
+BIDS_FILTER_CONTAINER_FILE="/work/bids_filter_${ANAT_MODE}_${SUBJ}_${SES}.json"
+if [ "${ANAT_MODE}" = "defaced" ]; then
+    cat > "${BIDS_FILTER_HOST_FILE}" <<EOF
+{
+  "t1w": {
+    "datatype": "anat",
+    "suffix": "T1w",
+    "desc": "defaced"
+  },
+  "bold": {
+    "datatype": "func",
+    "suffix": "bold"
+  }
+}
+EOF
+else
+    cat > "${BIDS_FILTER_HOST_FILE}" <<EOF
+{
+  "t1w": {
+    "datatype": "anat",
+    "suffix": "T1w",
+    "desc": null
+  },
+  "bold": {
+    "datatype": "func",
+    "suffix": "bold"
+  }
+}
+EOF
+fi
+
+echo "Using BIDS filter file: ${BIDS_FILTER_HOST_FILE}"
 
 # --- 3. Run fMRIPrep ---
 # Note: We use --fs-subject-id to force fMRIPrep to use the .long folder
@@ -63,6 +115,7 @@ apptainer run --cleanenv \
   --fs-subjects-dir /fsdir \
   --fs-subject-id "${FS_LONG_ID}" \
   --session-id "${SES#ses-}" \
+  --bids-filter-file "${BIDS_FILTER_CONTAINER_FILE}" \
   --work-dir /work \
   --output-spaces MNI152NLin2009cAsym:res-2 \
   --skip-bids-validation \

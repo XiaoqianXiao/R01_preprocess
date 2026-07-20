@@ -1,10 +1,30 @@
 #!/bin/bash
-DERIVS_DIR="/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/freesurfer"
+DERIVS_ROOT="/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives"
+ANAT_MODE="${ANAT_MODE:-defaced}"
+
+case "${ANAT_MODE}" in
+    defaced)
+        DERIVS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer}"
+        EXPECTED_LOG_PATTERN="desc-defaced"
+        EXPECTED_LABEL="Defaced"
+        ;;
+    original)
+        DERIVS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer_original}"
+        EXPECTED_LOG_PATTERN="_T1w.nii.gz"
+        EXPECTED_LABEL="Original"
+        ;;
+    *)
+        echo "ERROR: ANAT_MODE must be 'defaced' or 'original' (got '${ANAT_MODE}')"
+        exit 1
+        ;;
+esac
 
 echo "=========================================================="
 echo "FreeSurfer Verification Report"
 echo "=========================================================="
-printf "%-15s | %-15s | %-30s\n" "Subject" "Status" "Defaced Input Check"
+echo "Anatomical input mode: ${ANAT_MODE}"
+echo "FreeSurfer derivatives directory: ${DERIVS_DIR}"
+printf "%-15s | %-15s | %-30s\n" "Subject" "Status" "Input Check"
 echo "----------------------------------------------------------"
 
 for SUBJ_DIR in "${DERIVS_DIR}"/sub-*; do
@@ -19,10 +39,9 @@ for SUBJ_DIR in "${DERIVS_DIR}"/sub-*; do
         STATUS="INCOMPLETE"
     fi
 
-    # 2. Check provenance (Did it use the defaced file?)
-    # We grep the log to see if the input command contained 'desc-defaced'
-    if grep -q "desc-defaced" "${LOG_FILE}" 2>/dev/null; then
-        INPUT_CHECK="Verified (Defaced used)"
+    # 2. Check provenance from the recon-all command in the log.
+    if grep -q "${EXPECTED_LOG_PATTERN}" "${LOG_FILE}" 2>/dev/null; then
+        INPUT_CHECK="Verified (${EXPECTED_LABEL} used)"
     else
         INPUT_CHECK="WARNING: Input unclear"
     fi

@@ -2,6 +2,15 @@
 
 # Define your BIDS directory
 BIDS_ROOT="/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii"
+ANAT_MODE="${ANAT_MODE:-defaced}"
+
+case "${ANAT_MODE}" in
+    defaced|original) ;;
+    *)
+        echo "Error: ANAT_MODE must be 'defaced' or 'original' (got '${ANAT_MODE}')"
+        exit 1
+        ;;
+esac
 
 # Create a directory for log files
 mkdir -p logs
@@ -31,8 +40,9 @@ echo "-----------------------------------------------------------"
 echo "fMRIPrep Longitudinal Launcher"
 echo "Found ${NUM_SESSIONS} targets (sessions/subjects)."
 echo "Submitting array job for indices 0 to ${ARRAY_LIMIT}..."
+echo "Anatomical input mode: ${ANAT_MODE}"
 echo "-----------------------------------------------------------"
 
 # Submit the array job
 # The fmriprep.sbatch script will use SLURM_ARRAY_TASK_ID to pick the specific session
-sbatch --array=0-${ARRAY_LIMIT} fmriprep.sbatch
+sbatch --array=0-${ARRAY_LIMIT} --export=ALL,ANAT_MODE="${ANAT_MODE}" fmriprep.sbatch

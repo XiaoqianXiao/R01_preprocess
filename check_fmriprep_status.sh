@@ -1,14 +1,27 @@
 #!/bin/bash
 
-# --- CONFIGURATION (UPDATE THIS PATH) ---
-DERIVS_DIR="/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/fmriprep"
-# ----------------------------------------
+DERIVS_ROOT="/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives"
+ANAT_MODE="${ANAT_MODE:-defaced}"
+
+case "${ANAT_MODE}" in
+    defaced)
+        DERIVS_DIR="${FMRIPREP_OUTPUT_DIR:-${DERIVS_ROOT}/fmriprep}"
+        ;;
+    original)
+        DERIVS_DIR="${FMRIPREP_OUTPUT_DIR:-${DERIVS_ROOT}/fmriprep_original}"
+        ;;
+    *)
+        echo "ERROR: ANAT_MODE must be 'defaced' or 'original' (got '${ANAT_MODE}')"
+        exit 1
+        ;;
+esac
 
 # Define Output CSV
-OUTPUT_CSV="fmriprep_status_report.csv"
+OUTPUT_CSV="fmriprep_status_report_${ANAT_MODE}.csv"
 echo "Subject,HTML_Report,Anat_Preproc,Func_Preproc,Confounds,Status" > "${OUTPUT_CSV}"
 
 echo "======================================================================"
+echo "Anatomical input mode: ${ANAT_MODE}"
 echo "Checking fMRIPrep Outputs in: ${DERIVS_DIR}"
 echo "======================================================================"
 

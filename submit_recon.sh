@@ -1,6 +1,15 @@
 #!/bin/bash
 
 BIDS_ROOT="/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii"
+ANAT_MODE="${ANAT_MODE:-defaced}"
+
+case "${ANAT_MODE}" in
+    defaced|original) ;;
+    *)
+        echo "Error: ANAT_MODE must be 'defaced' or 'original' (got '${ANAT_MODE}')"
+        exit 1
+        ;;
+esac
 
 # Create a list of all session directories
 # Format: sub-XXX/ses-YYY
@@ -20,5 +29,6 @@ if [ "${NUM_SESSIONS}" -eq 0 ]; then
 fi
 
 echo "Found ${NUM_SESSIONS} targets. Submitting array 0-$((NUM_SESSIONS - 1))..."
+echo "Anatomical input mode: ${ANAT_MODE}"
 
-sbatch --array=0-$((NUM_SESSIONS - 1)) recon_all.sbatch
+sbatch --array=0-$((NUM_SESSIONS - 1)) --export=ALL,ANAT_MODE="${ANAT_MODE}" recon_all.sbatch

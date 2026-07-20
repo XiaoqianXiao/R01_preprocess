@@ -10,9 +10,25 @@
 
 CONTAINER_SIF=/gscratch/fang/images/freesurfer.sif
 LICENSE_FILE=/mmfs1/home/xxqian/files/fs_license.txt
-DERIVS_DIR=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/freesurfer
+DERIVS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives
+ANAT_MODE="${ANAT_MODE:-defaced}"
+
+case "${ANAT_MODE}" in
+    defaced)
+        DERIVS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer}"
+        ;;
+    original)
+        DERIVS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer_original}"
+        ;;
+    *)
+        echo "ERROR: ANAT_MODE must be 'defaced' or 'original' (got '${ANAT_MODE}')"
+        exit 1
+        ;;
+esac
 
 module load apptainer 2>/dev/null || true
+echo "Anatomical input mode: ${ANAT_MODE}"
+echo "FreeSurfer derivatives directory: ${DERIVS_DIR}"
 
 if [ "$STAGE" == "BASE" ]; then
     echo "Running STAGE: BASE for $SUBID"

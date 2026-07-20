@@ -1,8 +1,23 @@
 #!/bin/bash
 
 # --- CONFIGURATION ---
-DERIVS_DIR="/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/freesurfer"
-OUTPUT_CSV="freesurfer_longitudinal_status.csv"
+DERIVS_ROOT="/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives"
+ANAT_MODE="${ANAT_MODE:-defaced}"
+
+case "${ANAT_MODE}" in
+    defaced)
+        DERIVS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer}"
+        ;;
+    original)
+        DERIVS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer_original}"
+        ;;
+    *)
+        echo "ERROR: ANAT_MODE must be 'defaced' or 'original' (got '${ANAT_MODE}')"
+        exit 1
+        ;;
+esac
+
+OUTPUT_CSV="freesurfer_longitudinal_status_${ANAT_MODE}.csv"
 
 # Critical files for successful completion
 REQUIRED_FILES=(
@@ -19,6 +34,8 @@ echo "Subject_ID,Type,State,Lock_Files,Missing_Files,Action_Needed" > "${OUTPUT_
 
 printf "\n%-35s %-12s %-10s %-8s %-15s\n" "FOLDER NAME" "TYPE" "STATE" "LOCKS" "ACTION"
 echo "--------------------------------------------------------------------------------------------"
+echo "Anatomical input mode: ${ANAT_MODE}"
+echo "Checking FreeSurfer Outputs in: ${DERIVS_DIR}"
 
 for subj_path in "${DERIVS_DIR}"/sub-*; do
     [ -d "$subj_path" ] || continue

@@ -13,7 +13,22 @@
 CONTAINER_SIF=/gscratch/fang/images/freesurfer.sif
 LICENSE_FILE=/mmfs1/home/xxqian/files/fs_license.txt
 BIDS_ROOT="${BIDS_ROOT:-/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii}"
-DERIVS_DIR=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives/freesurfer
+DERIVS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/derivatives
+ANAT_MODE="${ANAT_MODE:-defaced}"
+
+case "${ANAT_MODE}" in
+    defaced)
+        DERIVS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer}"
+        ;;
+    original)
+        DERIVS_DIR="${FS_DERIVS_DIR:-${DERIVS_ROOT}/freesurfer_original}"
+        ;;
+    *)
+        echo "ERROR: ANAT_MODE must be 'defaced' or 'original' (got '${ANAT_MODE}')"
+        exit 1
+        ;;
+esac
+
 mkdir -p "${DERIVS_DIR}" logs
 module load apptainer 2>/dev/null || true
 # --- 1. Identify Target (Subject/Session) ---
@@ -58,11 +73,21 @@ TARGET_DIR="${BIDS_ROOT}/${CURRENT_TARGET}"
 echo "Processing Target: ${FS_ID}"
 echo "Current target path: ${CURRENT_TARGET}"
 echo "Array task id: ${SLURM_ARRAY_TASK_ID}"
-# --- 2. Find the Defaced T1w Image ---
+echo "Anatomical input mode: ${ANAT_MODE}"
+echo "FreeSurfer derivatives directory: ${DERIVS_DIR}"
+
+# --- 2. Find the requested T1w Image ---
 # Restrict search ONLY to the specific session folder
-INPUT_FILE=$(find "${TARGET_DIR}" -name "*_desc-defaced_T1w.nii.gz" | head -n 1)
+if [ "${ANAT_MODE}" = "defaced" ]; then
+    INPUT_FILE=$(find "${TARGET_DIR}" -name "*_desc-defaced_T1w.nii.gz" | head -n 1)
+    MISSING_MSG="No defaced T1w found in ${TARGET_DIR}. Run PyDeface first or use ANAT_MODE=original."
+else
+    INPUT_FILE=$(find "${TARGET_DIR}" -name "*_T1w.nii.gz" ! -name "*_desc-defaced_T1w.nii.gz" | head -n 1)
+    MISSING_MSG="No original T1w found in ${TARGET_DIR}."
+fi
+
 if [ -z "${INPUT_FILE}" ]; then
-    echo "Error: No defaced T1w found in ${TARGET_DIR}. Check PyDeface output!"
+    echo "Error: ${MISSING_MSG}"
     exit 1
 fi
 echo "  -> Input: $(basename "${INPUT_FILE}")"

@@ -36,11 +36,9 @@ def infotodict(seqinfo):
                 entities[key] = value
         
         # 3. Construct the BIDS filename
-        # CHANGE: Removed 'ses-' prefix here. 
-        # We assume {session} already contains 'ses-pilot' from the bash script.
         filename_parts = [
             'sub-{subject}', 
-            '{session}'
+            'ses-{session}'
         ]
         
         for entity_key in bids_order:
@@ -51,9 +49,8 @@ def infotodict(seqinfo):
         filename_parts.append(suffix)
         filename_base = '_'.join(filename_parts)
         
-        # CHANGE: Removed 'ses-' prefix from directory path too.
-        # Path: sub-{subject}/{session}/{datatype}/{filename_base}
-        out_template = f'sub-{{subject}}/{{session}}/{datatype}/{filename_base}'
+        # Path: sub-{subject}/ses-{session}/{datatype}/{filename_base}
+        out_template = f'sub-{{subject}}/ses-{{session}}/{datatype}/{filename_base}'
         
         key = create_key(out_template)
         
