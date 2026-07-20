@@ -163,7 +163,8 @@ if [[ "${LIST_ONLY}" == "1" ]]; then
     exit 0
 fi
 
-python3 - "$MANIFEST" <<'PY' | xargs -P "${JOBS}" -I {} fw download --yes "{}" -o "${BIND_DEST}" --include dicom
+cd "${BIND_DEST}"
+python3 - "$MANIFEST" <<'PY' | xargs -P "${JOBS}" -I {} fw download --yes "{}" --include dicom
 import csv
 import sys
 
