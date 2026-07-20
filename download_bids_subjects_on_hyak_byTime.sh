@@ -8,6 +8,9 @@ set -euo pipefail
 #   START_DATE=2026-06-22 LIST_ONLY=1 ./download_bids_subjects_on_hyak_byTime.sh
 #   START_DATE=2026-06-22 LIST_ONLY=0 ./download_bids_subjects_on_hyak_byTime.sh
 #
+# If the Apptainer image does not already include the Flywheel Python SDK:
+#   INSTALL_SDK=1 START_DATE=2026-06-22 LIST_ONLY=1 ./download_bids_subjects_on_hyak_byTime.sh
+#
 # Notes:
 #   - fw sync --include only filters file types, not dates.
 #   - This script first queries sessions by date, writes a CSV manifest, then
@@ -21,6 +24,8 @@ START_DATE="${START_DATE:-2026-06-22}"
 LIST_ONLY="${LIST_ONLY:-1}"
 JOBS="${JOBS:-4}"
 MANIFEST="${MANIFEST:-${BIND_DEST}/sessions_since_${START_DATE}.csv}"
+INSTALL_SDK="${INSTALL_SDK:-0}"
+PYTHONUSERBASE="${PYTHONUSERBASE:-${BIND_DEST}/.python-userbase}"
 
 if [[ -z "${FW_KEY:-}" ]]; then
     echo "Error: FW_KEY is not set. Run: export FW_KEY='your_flywheel_api_key'" >&2
@@ -32,11 +37,17 @@ if [[ "${LIST_ONLY}" != "0" && "${LIST_ONLY}" != "1" ]]; then
     exit 1
 fi
 
+if [[ "${INSTALL_SDK}" != "0" && "${INSTALL_SDK}" != "1" ]]; then
+    echo "Error: INSTALL_SDK must be 0 or 1." >&2
+    exit 1
+fi
+
 apptainer exec \
     --env FW_KEY="${FW_KEY}" \
+    --env PYTHONUSERBASE="${PYTHONUSERBASE}" \
     -B "${BIND_SRC}:${BIND_DEST}" \
     "${IMAGE}" \
-    bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" <<'CONTAINER_SCRIPT'
+    bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" "${INSTALL_SDK}" <<'CONTAINER_SCRIPT'
 set -euo pipefail
 
 START_DATE="$1"
@@ -45,8 +56,30 @@ MANIFEST="$3"
 PROJECT_PATH="$4"
 BIND_DEST="$5"
 JOBS="$6"
+INSTALL_SDK="$7"
 
 fw login "${FW_KEY}"
+
+if ! python3 -c 'import flywheel' >/dev/null 2>&1; then
+    if [[ "${INSTALL_SDK}" == "1" ]]; then
+        echo "Flywheel Python SDK is missing; installing flywheel-sdk into ${PYTHONUSERBASE}."
+        python3 -m pip install --user flywheel-sdk
+    else
+        cat >&2 <<MSG
+Error: The Flywheel Python SDK is not installed in this Apptainer image.
+
+The fw CLI can download data, but it cannot filter sessions by timestamp.
+This script needs the Python SDK only for the date query step.
+
+Rerun with:
+  INSTALL_SDK=1 START_DATE=${START_DATE} LIST_ONLY=${LIST_ONLY} ./download_bids_subjects_on_hyak_byTime.sh
+
+The SDK will be installed under:
+  ${PYTHONUSERBASE}
+MSG
+        exit 1
+    fi
+fi
 
 python3 - "$START_DATE" "$MANIFEST" "$PROJECT_PATH" <<'PY'
 import csv
@@ -129,7 +162,7 @@ if [[ "${LIST_ONLY}" == "1" ]]; then
     exit 0
 fi
 
-python - "$MANIFEST" <<'PY' | xargs -P "${JOBS}" -I {} fw download "{}" -o "${BIND_DEST}" --include dicom
+python3 - "$MANIFEST" <<'PY' | xargs -P "${JOBS}" -I {} fw download "{}" -o "${BIND_DEST}" --include dicom
 import csv
 import sys
 
