@@ -8,8 +8,9 @@ set -euo pipefail
 #   START_DATE=2026-06-22 LIST_ONLY=1 ./download_bids_subjects_on_hyak_byTime.sh
 #   START_DATE=2026-06-22 LIST_ONLY=0 ./download_bids_subjects_on_hyak_byTime.sh
 #
-# If the Apptainer image does not already include the Flywheel Python SDK:
-#   INSTALL_SDK=1 START_DATE=2026-06-22 LIST_ONLY=1 ./download_bids_subjects_on_hyak_byTime.sh
+# If the Apptainer image does not already include the Flywheel Python SDK,
+# this script installs it under /DATA_DIR/.python-userbase by default.
+# Set INSTALL_SDK=0 to fail instead of installing.
 #
 # Notes:
 #   - fw sync --include only filters file types, not dates.
@@ -24,7 +25,7 @@ START_DATE="${START_DATE:-2026-06-22}"
 LIST_ONLY="${LIST_ONLY:-1}"
 JOBS="${JOBS:-4}"
 MANIFEST="${MANIFEST:-${BIND_DEST}/sessions_since_${START_DATE}.csv}"
-INSTALL_SDK="${INSTALL_SDK:-0}"
+INSTALL_SDK="${INSTALL_SDK:-1}"
 PYTHONUSERBASE="${PYTHONUSERBASE:-${BIND_DEST}/.python-userbase}"
 
 if [[ -z "${FW_KEY:-}" ]]; then
@@ -72,7 +73,7 @@ The fw CLI can download data, but it cannot filter sessions by timestamp.
 This script needs the Python SDK only for the date query step.
 
 Rerun with:
-  INSTALL_SDK=1 START_DATE=${START_DATE} LIST_ONLY=${LIST_ONLY} ./download_bids_subjects_on_hyak_byTime.sh
+  INSTALL_SDK=1 START_DATE=${START_DATE} LIST_ONLY=${LIST_ONLY} bash download_bids_subjects_on_hyak_byTime.sh
 
 The SDK will be installed under:
   ${PYTHONUSERBASE}
