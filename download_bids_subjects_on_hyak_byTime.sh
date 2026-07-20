@@ -7,6 +7,7 @@ set -euo pipefail
 #   export FW_KEY='...'
 #   START_DATE=2026-06-22 LIST_ONLY=1 ./download_bids_subjects_on_hyak_byTime.sh
 #   START_DATE=2026-06-22 LIST_ONLY=0 ./download_bids_subjects_on_hyak_byTime.sh
+#   EXTRACT_AFTER=1 KEEP_TARS=1 LIST_ONLY=0 ./download_bids_subjects_on_hyak_byTime.sh
 #
 # If the Apptainer image does not already include the Flywheel Python SDK,
 # this script installs it under /DATA_DIR/.python-userbase by default.
@@ -15,7 +16,9 @@ set -euo pipefail
 # Notes:
 #   - fw sync --include only filters file types, not dates.
 #   - This script first queries sessions by date, writes a CSV manifest, then
-#     downloads each matching session with fw download --include dicom.
+#     downloads each matching session as a subject-specific tar file.
+#   - By default, each tar is extracted into /DATA_DIR/<subject>/<session>/ after
+#     a successful download, and the tar is kept for audit/resume purposes.
 
 IMAGE="${IMAGE:-/gscratch/fang/images/flywheel.sif}"
 BIND_SRC="${BIND_SRC:-/gscratch/fang/IFOCUS/sourcedata/MRI}"
@@ -27,6 +30,8 @@ JOBS="${JOBS:-4}"
 MANIFEST="${MANIFEST:-${BIND_DEST}/sessions_since_${START_DATE}.csv}"
 INSTALL_SDK="${INSTALL_SDK:-1}"
 PYTHONUSERBASE="${PYTHONUSERBASE:-${BIND_DEST}/.python-userbase}"
+EXTRACT_AFTER="${EXTRACT_AFTER:-1}"
+KEEP_TARS="${KEEP_TARS:-1}"
 
 if [[ -z "${FW_KEY:-}" ]]; then
     echo "Error: FW_KEY is not set. Run: export FW_KEY='your_flywheel_api_key'" >&2
@@ -43,12 +48,22 @@ if [[ "${INSTALL_SDK}" != "0" && "${INSTALL_SDK}" != "1" ]]; then
     exit 1
 fi
 
+if [[ "${EXTRACT_AFTER}" != "0" && "${EXTRACT_AFTER}" != "1" ]]; then
+    echo "Error: EXTRACT_AFTER must be 0 or 1." >&2
+    exit 1
+fi
+
+if [[ "${KEEP_TARS}" != "0" && "${KEEP_TARS}" != "1" ]]; then
+    echo "Error: KEEP_TARS must be 0 or 1." >&2
+    exit 1
+fi
+
 apptainer exec \
     --env FW_KEY="${FW_KEY}" \
     --env PYTHONUSERBASE="${PYTHONUSERBASE}" \
     -B "${BIND_SRC}:${BIND_DEST}" \
     "${IMAGE}" \
-    bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" "${INSTALL_SDK}" <<'CONTAINER_SCRIPT'
+    bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" "${INSTALL_SDK}" "${EXTRACT_AFTER}" "${KEEP_TARS}" <<'CONTAINER_SCRIPT'
 set -euo pipefail
 
 START_DATE="$1"
@@ -58,6 +73,8 @@ PROJECT_PATH="$4"
 BIND_DEST="$5"
 JOBS="$6"
 INSTALL_SDK="$7"
+EXTRACT_AFTER="$8"
+KEEP_TARS="$9"
 
 fw login "${FW_KEY}"
 
@@ -163,15 +180,59 @@ if [[ "${LIST_ONLY}" == "1" ]]; then
     exit 0
 fi
 
-cd "${BIND_DEST}"
-python3 - "$MANIFEST" <<'PY' | xargs -P "${JOBS}" -I {} fw download --yes "{}" --include dicom
+download_and_extract() {
+    download_path="$1"
+    tar_path="$2"
+    extract_dir="$3"
+
+    if [[ ! -s "${tar_path}" ]]; then
+        echo "Downloading ${download_path} -> ${tar_path}"
+        fw download --yes "${download_path}" -o "${tar_path}" --include dicom
+    else
+        echo "Found existing tar, skipping download: ${tar_path}"
+    fi
+
+    if [[ "${EXTRACT_AFTER}" == "1" ]]; then
+        mkdir -p "${extract_dir}"
+        echo "Extracting ${tar_path} -> ${extract_dir}"
+        tar -xf "${tar_path}" -C "${extract_dir}"
+    fi
+
+    if [[ "${KEEP_TARS}" == "0" ]]; then
+        rm -f "${tar_path}"
+    fi
+}
+
+export EXTRACT_AFTER KEEP_TARS
+export -f download_and_extract
+
+python3 - "$MANIFEST" "$BIND_DEST" <<'PY' | xargs -0 -n 3 -P "${JOBS}" bash -c 'download_and_extract "$1" "$2" "$3"' bash
 import csv
+import os
+import re
 import sys
 
-with open(sys.argv[1], newline="") as f:
+manifest, bind_dest = sys.argv[1:3]
+
+
+def safe_name(value):
+    value = value.strip() or "unknown"
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", value)
+
+
+with open(manifest, newline="") as f:
     for row in csv.DictReader(f):
         path = row["download_path"]
         if path:
-            print(path)
+            subject = safe_name(row["subject_label"])
+            session = safe_name(row["session_label"])
+            tar_path = os.path.join(bind_dest, f"{subject}_{session}.tar")
+            extract_dir = os.path.join(bind_dest, subject, session)
+            sys.stdout.buffer.write(path.encode())
+            sys.stdout.buffer.write(b"\0")
+            sys.stdout.buffer.write(tar_path.encode())
+            sys.stdout.buffer.write(b"\0")
+            sys.stdout.buffer.write(extract_dir.encode())
+            sys.stdout.buffer.write(b"\0")
 PY
 CONTAINER_SCRIPT
