@@ -27,7 +27,7 @@ BIND_DEST="${BIND_DEST:-/DATA_DIR}"
 PROJECT_PATH="${PROJECT_PATH:-fang-lab/IFOCUS}"
 START_DATE="${START_DATE:-2026-06-01}"
 LIST_ONLY="${LIST_ONLY:-1}"
-JOBS="${JOBS:-4}"
+JOBS="${JOBS:-1}"
 MANIFEST="${MANIFEST:-${BIND_DEST}/sessions_since_${START_DATE}.csv}"
 INSTALL_SDK="${INSTALL_SDK:-1}"
 PYTHONUSERBASE="${PYTHONUSERBASE:-${BIND_DEST}/.python-userbase}"
@@ -197,11 +197,24 @@ download_and_extract() {
     tar_path="$2"
     extract_dir="$3"
 
-    if [[ ! -s "${tar_path}" ]]; then
+    tar_is_valid() {
+        [[ -s "${tar_path}" ]] && tar -tf "${tar_path}" >/dev/null 2>&1
+    }
+
+    if tar_is_valid; then
+        echo "Found existing valid tar, skipping download: ${tar_path}"
+    else
+        if [[ -e "${tar_path}" ]]; then
+            echo "Removing incomplete or invalid tar: ${tar_path}"
+            rm -f "${tar_path}"
+        fi
         echo "Downloading ${download_path} -> ${tar_path}"
         fw download --yes "${download_path}" -o "${tar_path}" --include dicom
-    else
-        echo "Found existing tar, skipping download: ${tar_path}"
+
+        if ! tar_is_valid; then
+            echo "Error: Downloaded tar is missing or invalid: ${tar_path}" >&2
+            return 1
+        fi
     fi
 
     if [[ "${EXTRACT_AFTER}" == "1" ]]; then
