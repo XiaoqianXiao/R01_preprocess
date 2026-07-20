@@ -61,13 +61,34 @@ for SES_PATH in "${SUBJ_PATH}"/ses-*; do
     echo "  Session Arg        : ${SES_CLEAN}"  
     echo "  ------------------------------------------------"
 
+    TMP_ROOT="${SLURM_TMPDIR:-/tmp}/heudiconv_${SLURM_JOB_ID:-manual}_${SLURM_ARRAY_TASK_ID:-0}_${SUBJ}_${SES_CLEAN}"
+    TMP_SES="${TMP_ROOT}/${SUBJ}/ses-${SES_CLEAN}"
+    rm -rf "${TMP_ROOT}"
+    mkdir -p "${TMP_SES}"
+
+    file_count=0
+    while IFS= read -r -d '' DICOM_FILE; do
+        file_count=$((file_count + 1))
+        base_name=$(basename "${DICOM_FILE}")
+        ln -s "${DICOM_FILE}" "${TMP_SES}/${file_count}_${base_name}"
+    done < <(find "${SES_PATH}" -type f ! -name ".*" -print0 | sort -z)
+
+    if [ "${file_count}" -eq 0 ]; then
+        echo "Warning: No DICOM files found under ${SES_PATH}; skipping."
+        rm -rf "${TMP_ROOT}"
+        continue
+    fi
+
+    echo "  Real DICOM files   : ${file_count}"
+
     apptainer exec \
       -B "${DICOM_ROOT}:/dicom:ro" \
+      -B "${TMP_ROOT}:/heudiconv_input:ro" \
       -B "${BIDS_ROOT}:/bids" \
       -B "${HEURISTIC}:/heuristic.py:ro" \
       "${HEUDICONV_SIF}" \
       heudiconv \
-        -d '/dicom/{subject}/ses-{session}/*/*.dicom' \
+        -d '/heudiconv_input/{subject}/ses-{session}/*' \
         -s "${SUBJ}" \
         -ss "${SES_CLEAN}" \
         -f /heuristic.py \
@@ -75,4 +96,6 @@ for SES_PATH in "${SUBJ_PATH}"/ses-*; do
         -b \
         -o /bids \
         --overwrite
+
+    rm -rf "${TMP_ROOT}"
 done

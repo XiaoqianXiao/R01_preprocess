@@ -100,6 +100,7 @@ sbatch --export=ALL,TARGET_SUB="sub-001",TARGET_SES="ses-01" heudiconv_job.sbatc
 **What it does:**
 - Scans the DICOM directory for all subjects
 - Submits a job array (one job per subject)
+- Stages each session's real DICOM files into `$SLURM_TMPDIR` before conversion, so Flywheel package directories such as `*.dicom/` are not passed to heudiconv as files
 - Uses `heuristic_reproin_like.py` for BIDS conversion
 - Outputs to `sourcedata/nii/` in BIDS format
 
