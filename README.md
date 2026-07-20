@@ -43,25 +43,20 @@ export FW_KEY="uw-chn.flywheel.io:YOUR_API_KEY"
 # This writes a manifest only; no data are downloaded.
 START_DATE=2026-06-22 LIST_ONLY=1 bash download_bids_subjects_on_hyak_byTime.sh
 
-# Download subject-specific tar files, then extract each successful download.
+# Download DICOM files into <subject>/<session>/<acquisition>/ folders.
 START_DATE=2026-06-22 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
 ```
 
 **What it does:**
-- Logs into Flywheel inside `/gscratch/fang/images/flywheel.sif`
 - Finds sessions in `fang-lab/IFOCUS` with `session.timestamp >= START_DATE`
 - Writes a manifest such as `/gscratch/fang/IFOCUS/sourcedata/MRI/sessions_since_2026-06-22.csv`
-- Downloads each matched session as `/gscratch/fang/IFOCUS/sourcedata/MRI/<subject>_<session>.tar`
-- Extracts each tar into `/gscratch/fang/IFOCUS/sourcedata/MRI/<subject>/<session>/`
-- Keeps the tar files by default for audit/retry purposes
+- Downloads DICOM files into `/gscratch/fang/IFOCUS/sourcedata/MRI/<subject>/<session>/<acquisition>/`
+- Reuses existing files only when the file size matches Flywheel metadata
 
 **Common options:**
 ```bash
-# Download tar files only; do not extract
-EXTRACT_AFTER=0 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
-
-# Extract after download, then remove tar files
-KEEP_TARS=0 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
+# Use the older fw download tar workflow. This may be killed by Hyak/Apptainer.
+DOWNLOAD_MODE=tar EXTRACT_AFTER=1 KEEP_TARS=1 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
 
 # Change parallel download count. Default is JOBS=1 because Hyak may kill
 # multiple concurrent fw download processes inside Apptainer.
@@ -77,8 +72,8 @@ PROJECT_PATH="fang-lab/IFOCUS" BIND_SRC="/gscratch/fang/IFOCUS/sourcedata/MRI" b
 **Notes:**
 - `fw sync --include` filters file types, not dates. This script queries sessions by date first, then downloads the matched sessions.
 - If the Apptainer image does not include the Flywheel Python SDK, the script installs `flywheel-sdk` under `/DATA_DIR/.python-userbase`.
-- The script skips `fw login` by default because that step can be killed by Hyak/Apptainer squashfuse cleanup; set `RUN_FW_LOGIN=1` only if downloads fail with an authentication error.
-- Downloads run one at a time by default (`JOBS=1`) and existing tar files are validated before being reused, so killed partial downloads are retried.
+- The default `DOWNLOAD_MODE=files` avoids `fw download` because the CLI tar workflow can be killed by Hyak/Apptainer.
+- `DOWNLOAD_MODE=tar` skips `fw login` by default because that step can be killed by Hyak/Apptainer squashfuse cleanup; set `RUN_FW_LOGIN=1` only if tar downloads fail with an authentication error.
 - Do not commit or paste real Flywheel API keys into scripts or documentation.
 
 ### Step 1: DICOM to BIDS Conversion

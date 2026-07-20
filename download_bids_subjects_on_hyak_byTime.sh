@@ -17,9 +17,8 @@ set -euo pipefail
 # Notes:
 #   - fw sync --include only filters file types, not dates.
 #   - This script first queries sessions by date, writes a CSV manifest, then
-#     downloads each matching session as a subject-specific tar file.
-#   - By default, each tar is extracted into /DATA_DIR/<subject>/<session>/ after
-#     a successful download, and the tar is kept for audit/resume purposes.
+#     downloads each matching session file-by-file using the Flywheel Python SDK.
+#   - Set DOWNLOAD_MODE=tar only if you specifically want to use fw download.
 
 IMAGE="${IMAGE:-/gscratch/fang/images/flywheel.sif}"
 BIND_SRC="${BIND_SRC:-/gscratch/fang/IFOCUS/sourcedata/MRI}"
@@ -34,6 +33,7 @@ PYTHONUSERBASE="${PYTHONUSERBASE:-${BIND_DEST}/.python-userbase}"
 EXTRACT_AFTER="${EXTRACT_AFTER:-1}"
 KEEP_TARS="${KEEP_TARS:-1}"
 RUN_FW_LOGIN="${RUN_FW_LOGIN:-0}"
+DOWNLOAD_MODE="${DOWNLOAD_MODE:-files}"
 
 if [[ -z "${FW_KEY:-}" ]]; then
     echo "Error: FW_KEY is not set. Run: export FW_KEY='your_flywheel_api_key'" >&2
@@ -65,12 +65,17 @@ if [[ "${RUN_FW_LOGIN}" != "0" && "${RUN_FW_LOGIN}" != "1" ]]; then
     exit 1
 fi
 
+if [[ "${DOWNLOAD_MODE}" != "files" && "${DOWNLOAD_MODE}" != "tar" ]]; then
+    echo "Error: DOWNLOAD_MODE must be files or tar." >&2
+    exit 1
+fi
+
 apptainer exec \
     --env FW_KEY="${FW_KEY}" \
     --env PYTHONUSERBASE="${PYTHONUSERBASE}" \
     -B "${BIND_SRC}:${BIND_DEST}" \
     "${IMAGE}" \
-    bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" "${INSTALL_SDK}" "${EXTRACT_AFTER}" "${KEEP_TARS}" "${RUN_FW_LOGIN}" <<'CONTAINER_SCRIPT'
+    bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" "${INSTALL_SDK}" "${EXTRACT_AFTER}" "${KEEP_TARS}" "${RUN_FW_LOGIN}" "${DOWNLOAD_MODE}" <<'CONTAINER_SCRIPT'
 set -euo pipefail
 
 START_DATE="$1"
@@ -83,6 +88,7 @@ INSTALL_SDK="$7"
 EXTRACT_AFTER="$8"
 KEEP_TARS="$9"
 RUN_FW_LOGIN="${10}"
+DOWNLOAD_MODE="${11}"
 
 if ! python3 -c 'import flywheel' >/dev/null 2>&1; then
     if [[ "${INSTALL_SDK}" == "1" ]]; then
@@ -183,6 +189,80 @@ echo "  ${MANIFEST}"
 if [[ "${LIST_ONLY}" == "1" ]]; then
     echo "LIST_ONLY=1, so no data were downloaded."
     echo "Review the manifest, then rerun with LIST_ONLY=0 to download."
+    exit 0
+fi
+
+if [[ "${DOWNLOAD_MODE}" == "files" ]]; then
+    python3 - "$MANIFEST" "$BIND_DEST" <<'PY'
+import csv
+import os
+import re
+import sys
+
+import flywheel
+
+manifest, bind_dest = sys.argv[1:3]
+fw = flywheel.Client(os.environ["FW_KEY"])
+
+
+def safe_name(value):
+    value = (value or "").strip() or "unknown"
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", value)
+
+
+def file_size(file_obj):
+    value = getattr(file_obj, "size", None)
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+with open(manifest, newline="") as f:
+    rows = list(csv.DictReader(f))
+
+for row in rows:
+    subject = safe_name(row["subject_label"])
+    session_label = safe_name(row["session_label"])
+    session = fw.get(row["session_id"])
+    session_dir = os.path.join(bind_dest, subject, session_label)
+    os.makedirs(session_dir, exist_ok=True)
+
+    print(f"Downloading DICOM files for {subject}/{session_label}")
+    acquisitions = list(session.acquisitions.iter_find())
+    for acq_ref in acquisitions:
+        acquisition = fw.get(acq_ref.id)
+        acq_label = safe_name(getattr(acquisition, "label", "acquisition"))
+        acq_dir = os.path.join(session_dir, acq_label)
+        os.makedirs(acq_dir, exist_ok=True)
+
+        for acq_file in acquisition.files:
+            if getattr(acq_file, "type", None) != "dicom":
+                continue
+
+            file_name = os.path.basename(acq_file.name)
+            out_path = os.path.join(acq_dir, file_name)
+            expected_size = file_size(acq_file)
+            if (
+                expected_size is not None
+                and os.path.exists(out_path)
+                and os.path.getsize(out_path) == expected_size
+            ):
+                print(f"  exists: {subject}/{session_label}/{acq_label}/{file_name}")
+                continue
+
+            if os.path.exists(out_path):
+                os.remove(out_path)
+
+            print(f"  downloading: {subject}/{session_label}/{acq_label}/{file_name}")
+            acquisition.download_file(acq_file.name, out_path)
+
+            if expected_size is not None and os.path.getsize(out_path) != expected_size:
+                raise RuntimeError(
+                    f"Downloaded size mismatch for {out_path}: "
+                    f"expected {expected_size}, got {os.path.getsize(out_path)}"
+                )
+PY
     exit 0
 fi
 
