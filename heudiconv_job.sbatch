@@ -69,8 +69,8 @@ for SES_PATH in "${SUBJ_PATH}"/ses-*; do
     file_count=0
     while IFS= read -r -d '' DICOM_FILE; do
         file_count=$((file_count + 1))
-        base_name=$(basename "${DICOM_FILE}")
-        ln -s "${DICOM_FILE}" "${TMP_SES}/${file_count}_${base_name}"
+        staged_name=$(printf "%06d.dcm" "${file_count}")
+        ln -s "${DICOM_FILE}" "${TMP_SES}/${staged_name}"
     done < <(find "${SES_PATH}" -type f ! -name ".*" -print0 | sort -z)
 
     if [ "${file_count}" -eq 0 ]; then
