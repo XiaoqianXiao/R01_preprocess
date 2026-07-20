@@ -47,6 +47,8 @@ START_DATE=2026-06-22 LIST_ONLY=1 bash download_bids_subjects_on_hyak_byTime.sh
 START_DATE=2026-06-22 LIST_ONLY=0 bash download_bids_subjects_on_hyak_byTime.sh
 ```
 
+Run the download step from an interactive compute allocation or batch job, not a login node, because long downloads can be killed on `klone-login*`.
+
 **What it does:**
 - Finds sessions in `fang-lab/IFOCUS` with `session.timestamp >= START_DATE`
 - Writes a manifest such as `/gscratch/fang/IFOCUS/sourcedata/MRI/sessions_since_2026-06-22.csv`
@@ -73,6 +75,7 @@ PROJECT_PATH="fang-lab/IFOCUS" BIND_SRC="/gscratch/fang/IFOCUS/sourcedata/MRI" b
 - `fw sync --include` filters file types, not dates. This script queries sessions by date first, then downloads the matched sessions.
 - If the Apptainer image does not include the Flywheel Python SDK, the script installs `flywheel-sdk` under `/DATA_DIR/.python-userbase`.
 - The default `DOWNLOAD_MODE=files` avoids `fw download` because the CLI tar workflow can be killed by Hyak/Apptainer.
+- File downloads are run as short per-file Python SDK processes, so reruns skip completed files and retry killed partial files.
 - `DOWNLOAD_MODE=tar` skips `fw login` by default because that step can be killed by Hyak/Apptainer squashfuse cleanup; set `RUN_FW_LOGIN=1` only if tar downloads fail with an authentication error.
 - Do not commit or paste real Flywheel API keys into scripts or documentation.
 

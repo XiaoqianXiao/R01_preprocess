@@ -193,7 +193,52 @@ if [[ "${LIST_ONLY}" == "1" ]]; then
 fi
 
 if [[ "${DOWNLOAD_MODE}" == "files" ]]; then
-    python3 - "$MANIFEST" "$BIND_DEST" <<'PY'
+    download_one_file() {
+        acquisition_id="$1"
+        file_name="$2"
+        out_path="$3"
+        expected_size="$4"
+        rel_path="$5"
+
+        python3 - "$acquisition_id" "$file_name" "$out_path" "$expected_size" "$rel_path" <<'PY'
+import os
+import sys
+
+import flywheel
+
+acquisition_id, file_name, out_path, expected_size, rel_path = sys.argv[1:6]
+expected_size = int(expected_size) if expected_size else None
+
+if (
+    expected_size is not None
+    and os.path.exists(out_path)
+    and os.path.getsize(out_path) == expected_size
+):
+    print(f"exists: {rel_path}")
+    raise SystemExit(0)
+
+if os.path.exists(out_path):
+    os.remove(out_path)
+
+os.makedirs(os.path.dirname(out_path), exist_ok=True)
+print(f"downloading: {rel_path}", flush=True)
+
+fw = flywheel.Client(os.environ["FW_KEY"])
+acquisition = fw.get(acquisition_id)
+acquisition.download_file(file_name, out_path)
+
+if expected_size is not None and os.path.getsize(out_path) != expected_size:
+    raise RuntimeError(
+        f"Downloaded size mismatch for {out_path}: "
+        f"expected {expected_size}, got {os.path.getsize(out_path)}"
+    )
+PY
+    }
+
+    export -f download_one_file
+    export FW_KEY
+
+    python3 - "$MANIFEST" "$BIND_DEST" <<'PY' | xargs -0 -n 5 -P "${JOBS}" bash -c 'download_one_file "$1" "$2" "$3" "$4" "$5"' bash
 import csv
 import os
 import re
@@ -228,13 +273,11 @@ for row in rows:
     session_dir = os.path.join(bind_dest, subject, session_label)
     os.makedirs(session_dir, exist_ok=True)
 
-    print(f"Downloading DICOM files for {subject}/{session_label}")
     acquisitions = list(session.acquisitions.iter_find())
     for acq_ref in acquisitions:
         acquisition = fw.get(acq_ref.id)
         acq_label = safe_name(getattr(acquisition, "label", "acquisition"))
         acq_dir = os.path.join(session_dir, acq_label)
-        os.makedirs(acq_dir, exist_ok=True)
 
         for acq_file in acquisition.files:
             if getattr(acq_file, "type", None) != "dicom":
@@ -243,25 +286,17 @@ for row in rows:
             file_name = os.path.basename(acq_file.name)
             out_path = os.path.join(acq_dir, file_name)
             expected_size = file_size(acq_file)
-            if (
-                expected_size is not None
-                and os.path.exists(out_path)
-                and os.path.getsize(out_path) == expected_size
-            ):
-                print(f"  exists: {subject}/{session_label}/{acq_label}/{file_name}")
-                continue
-
-            if os.path.exists(out_path):
-                os.remove(out_path)
-
-            print(f"  downloading: {subject}/{session_label}/{acq_label}/{file_name}")
-            acquisition.download_file(acq_file.name, out_path)
-
-            if expected_size is not None and os.path.getsize(out_path) != expected_size:
-                raise RuntimeError(
-                    f"Downloaded size mismatch for {out_path}: "
-                    f"expected {expected_size}, got {os.path.getsize(out_path)}"
-                )
+            rel_path = f"{subject}/{session_label}/{acq_label}/{file_name}"
+            values = [
+                acquisition.id,
+                acq_file.name,
+                out_path,
+                "" if expected_size is None else str(expected_size),
+                rel_path,
+            ]
+            for value in values:
+                sys.stdout.buffer.write(value.encode())
+                sys.stdout.buffer.write(b"\0")
 PY
     exit 0
 fi
