@@ -76,8 +76,6 @@ INSTALL_SDK="$7"
 EXTRACT_AFTER="$8"
 KEEP_TARS="$9"
 
-fw login "${FW_KEY}"
-
 if ! python3 -c 'import flywheel' >/dev/null 2>&1; then
     if [[ "${INSTALL_SDK}" == "1" ]]; then
         echo "Flywheel Python SDK is missing; installing flywheel-sdk into ${PYTHONUSERBASE}."
@@ -179,6 +177,8 @@ if [[ "${LIST_ONLY}" == "1" ]]; then
     echo "Review the manifest, then rerun with LIST_ONLY=0 to download."
     exit 0
 fi
+
+fw login "${FW_KEY}"
 
 download_and_extract() {
     download_path="$1"
