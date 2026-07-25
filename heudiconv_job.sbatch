@@ -19,6 +19,47 @@ BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 
 module load apptainer 2>/dev/null || true
 
+normalize_session_id() {
+    local session_id="$1"
+    session_id="${session_id#ses-}"
+    printf '%s' "${session_id}"
+}
+
+fix_double_session_prefixes() {
+    local bids_root="$1"
+    local subj="$2"
+    local ses_clean="$3"
+    local good_ses="ses-${ses_clean}"
+    local bad_ses="ses-ses-${ses_clean}"
+    local good_dir="${bids_root}/${subj}/${good_ses}"
+    local bad_dir="${bids_root}/${subj}/${bad_ses}"
+    local bad_file
+    local good_file
+    local rel_path
+
+    if [ -d "${bad_dir}" ]; then
+        while IFS= read -r -d '' bad_file; do
+            rel_path="${bad_file#${bad_dir}/}"
+            rel_path="${rel_path//_ses-ses-/_ses-}"
+            good_file="${good_dir}/${rel_path}"
+            mkdir -p "$(dirname "${good_file}")"
+            if [ ! -e "${good_file}" ]; then
+                mv "${bad_file}" "${good_file}"
+            fi
+        done < <(find "${bad_dir}" -type f -print0)
+        find "${bad_dir}" -depth -type d -empty -delete 2>/dev/null || true
+    fi
+
+    if [ -d "${good_dir}" ]; then
+        while IFS= read -r -d '' bad_file; do
+            good_file="${bad_file/_ses-ses-/_ses-}"
+            if [ "${bad_file}" != "${good_file}" ] && [ ! -e "${good_file}" ]; then
+                mv "${bad_file}" "${good_file}"
+            fi
+        done < <(find "${good_dir}" -type f -name "${subj}_ses-ses-${ses_clean}_*" -print0)
+    fi
+}
+
 # --- 1. Identify Subject ---
 # If TARGET_SUB is passed via --export, we use it. Otherwise, we use the array index.
 if [ ! -z "$TARGET_SUB" ]; then
@@ -46,14 +87,14 @@ for SES_PATH in "${SUBJ_PATH}"/ses-*; do
 
     # If TARGET_SES is passed, skip any session that doesn't match
     if [ ! -z "$TARGET_SES" ]; then
-        # Check if the raw folder matches 'ses-baseline' or just 'baseline'
-        if [[ "$SES_RAW" != "ses-$TARGET_SES" && "$SES_RAW" != "$TARGET_SES" ]]; then
+        TARGET_SES_CLEAN=$(normalize_session_id "${TARGET_SES}")
+        if [[ "$SES_RAW" != "ses-${TARGET_SES_CLEAN}" && "$SES_RAW" != "${TARGET_SES_CLEAN}" ]]; then
             continue
         fi
     fi
     
-    # FORCE CLEANING: Turn "ses-baseline" into "baseline"
-    SES_CLEAN=$(echo "$SES_RAW" | sed 's/^ses-//')
+    # heudiconv templates below add the BIDS "ses-" prefix, so pass only the label.
+    SES_CLEAN=$(normalize_session_id "${SES_RAW}")
     
     echo "  ------------------------------------------------"
     echo "  Processing Subject : ${SUBJ}"
@@ -97,6 +138,8 @@ for SES_PATH in "${SUBJ_PATH}"/ses-*; do
         -b \
         -o /bids \
         --overwrite
+
+    fix_double_session_prefixes "${BIDS_ROOT}" "${SUBJ}" "${SES_CLEAN}"
 
     rm -rf "${TMP_ROOT}"
 done
