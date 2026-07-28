@@ -37,8 +37,7 @@ def infotodict(seqinfo):
         
         # 3. Construct the BIDS filename
         filename_parts = [
-            'sub-{subject}', 
-            'ses-{session}'
+            '{bids_subject_session_prefix}'
         ]
         
         for entity_key in bids_order:
@@ -50,7 +49,10 @@ def infotodict(seqinfo):
         filename_base = '_'.join(filename_parts)
         
         # Path: sub-{subject}/ses-{session}/{datatype}/{filename_base}
-        out_template = f'sub-{{subject}}/ses-{{session}}/{datatype}/{filename_base}'
+        out_template = (
+            f'{{bids_subject_session_dir}}/'
+            f'{datatype}/{filename_base}'
+        )
         
         key = create_key(out_template)
         
