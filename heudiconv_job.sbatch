@@ -10,6 +10,8 @@
 #SBATCH --output=logs/%x_%A_%a.out
 #SBATCH --error=logs/%x_%A_%a.err
 
+set -euo pipefail
+
 # --- Configuration ---
 HEUDICONV_SIF=/gscratch/fang/images/heudiconv.sif
 HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess/heuristic_reproin_like.py
@@ -19,127 +21,103 @@ BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii
 
 module load apptainer 2>/dev/null || true
 
-normalize_session_id() {
-    local session_id="$1"
-    session_id="${session_id#ses-}"
-    printf '%s' "${session_id}"
-}
+# --- 1. Identify subject ---
+# Manual example:
+# sbatch --export=ALL,TARGET_SUB=139,TARGET_SES=T12 heudiconv_job.sbatch
 
-fix_double_session_prefixes() {
-    local bids_root="$1"
-    local subj="$2"
-    local ses_clean="$3"
-    local good_ses="ses-${ses_clean}"
-    local bad_ses="ses-ses-${ses_clean}"
-    local good_dir="${bids_root}/${subj}/${good_ses}"
-    local bad_dir="${bids_root}/${subj}/${bad_ses}"
-    local bad_file
-    local good_file
-    local rel_path
-
-    if [ -d "${bad_dir}" ]; then
-        while IFS= read -r -d '' bad_file; do
-            rel_path="${bad_file#${bad_dir}/}"
-            rel_path="${rel_path//_ses-ses-/_ses-}"
-            good_file="${good_dir}/${rel_path}"
-            mkdir -p "$(dirname "${good_file}")"
-            if [ ! -e "${good_file}" ]; then
-                mv "${bad_file}" "${good_file}"
-            fi
-        done < <(find "${bad_dir}" -type f -print0)
-        find "${bad_dir}" -depth -type d -empty -delete 2>/dev/null || true
-    fi
-
-    if [ -d "${good_dir}" ]; then
-        while IFS= read -r -d '' bad_file; do
-            good_file="${bad_file/_ses-ses-/_ses-}"
-            if [ "${bad_file}" != "${good_file}" ] && [ ! -e "${good_file}" ]; then
-                mv "${bad_file}" "${good_file}"
-            fi
-        done < <(find "${good_dir}" -type f -name "${subj}_ses-ses-${ses_clean}_*" -print0)
-    fi
-}
-
-# --- 1. Identify Subject ---
-# If TARGET_SUB is passed via --export, we use it. Otherwise, we use the array index.
-if [ ! -z "$TARGET_SUB" ]; then
-    SUBJ="$TARGET_SUB"
-    echo "Running in MANUAL mode for Subject: ${SUBJ}"
+if [[ -n "${TARGET_SUB:-}" ]]; then
+    SUBJ="${TARGET_SUB#sub-}"
+    echo "Running in MANUAL mode for subject ${SUBJ}"
 else
-    subjects=( $(ls -d "${DICOM_ROOT}"/* | xargs -n 1 basename) )
-    SUBJ=${subjects[$SLURM_ARRAY_TASK_ID]}
-    echo "Running in ARRAY mode for Subject: ${SUBJ} (Index: ${SLURM_ARRAY_TASK_ID})"
+    mapfile -t SUBJECTS < <(
+        find "${DICOM_ROOT}" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -printf '%f\n' |
+            sort -V
+    )
+
+    TASK_ID="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID or TARGET_SUB is required}"
+    SUBJ="${SUBJECTS[$TASK_ID]}"
+
+    echo "Running in ARRAY mode for subject ${SUBJ} (index ${TASK_ID})"
 fi
 
 SUBJ_PATH="${DICOM_ROOT}/${SUBJ}"
 
-if [ ! -d "${SUBJ_PATH}" ]; then
-    echo "Error: Subject directory ${SUBJ_PATH} not found."
+if [[ ! -d "${SUBJ_PATH}" ]]; then
+    echo "Error: Subject directory not found: ${SUBJ_PATH}" >&2
     exit 1
 fi
 
-# --- 2. Process Sessions ---
-#for SES_PATH in "${SUBJ_PATH}"/SESSIONS/ses-*; do
+# --- 2. Process sessions ---
 for SES_PATH in "${SUBJ_PATH}"/ses-*; do
     [[ -d "${SES_PATH}" ]] || continue
-    
-    SES_RAW=$(basename "${SES_PATH}")
 
-    # If TARGET_SES is passed, skip any session that doesn't match
-    if [ ! -z "$TARGET_SES" ]; then
-        TARGET_SES_CLEAN=$(normalize_session_id "${TARGET_SES}")
-        if [[ "$SES_RAW" != "ses-${TARGET_SES_CLEAN}" && "$SES_RAW" != "${TARGET_SES_CLEAN}" ]]; then
-            continue
-        fi
+    SES_FOLDER=$(basename "${SES_PATH}")  # ses-T12
+    SES="${SES_FOLDER#ses-}"              # T12
+
+    # Process only TARGET_SES when specified.
+    if [[ -n "${TARGET_SES:-}" ]]; then
+        TARGET_SES_CLEAN="${TARGET_SES#ses-}"
+        [[ "${SES}" == "${TARGET_SES_CLEAN}" ]] || continue
     fi
-    
-    # heudiconv templates below add the BIDS "ses-" prefix, so pass only the label.
-    SES_CLEAN=$(normalize_session_id "${SES_RAW}")
-    
-    echo "  ------------------------------------------------"
-    echo "  Processing Subject : ${SUBJ}"
-    echo "  Folder Found       : ${SES_RAW}"
-    echo "  Session Arg        : ${SES_CLEAN}"  
-    echo "  ------------------------------------------------"
 
-    TMP_ROOT="${SLURM_TMPDIR:-/tmp}/heudiconv_${SLURM_JOB_ID:-manual}_${SLURM_ARRAY_TASK_ID:-0}_${SUBJ}_${SES_CLEAN}"
-    TMP_SES="${TMP_ROOT}/${SUBJ}/ses-${SES_CLEAN}"
+    echo "------------------------------------------------"
+    echo "Subject       : ${SUBJ}"
+    echo "Source session: ${SES_PATH}"
+    echo "Session label : ${SES}"
+    echo "BIDS output   : ${BIDS_ROOT}/sub-${SUBJ}/ses-${SES}"
+    echo "------------------------------------------------"
+
+    # Stage DICOM links without BIDS prefixes:
+    # /heudiconv_input/139/T12/
+    TMP_ROOT="${SLURM_TMPDIR:-/tmp}/heudiconv_${SLURM_JOB_ID:-manual}_${SUBJ}_${SES}"
+    TMP_SES="${TMP_ROOT}/${SUBJ}/${SES}"
+
     rm -rf "${TMP_ROOT}"
     mkdir -p "${TMP_SES}"
 
-    file_count=0
-    while IFS= read -r -d '' DICOM_FILE; do
-        file_count=$((file_count + 1))
-        staged_name=$(printf "%06d.dcm" "${file_count}")
-        container_dicom="/dicom/${DICOM_FILE#${DICOM_ROOT}/}"
-        ln -s "${container_dicom}" "${TMP_SES}/${staged_name}"
-    done < <(find "${SES_PATH}" -type f ! -name ".*" -print0 | sort -z)
+    FILE_COUNT=0
 
-    if [ "${file_count}" -eq 0 ]; then
-        echo "Warning: No DICOM files found under ${SES_PATH}; skipping."
+    while IFS= read -r -d '' DICOM_FILE; do
+        FILE_COUNT=$((FILE_COUNT + 1))
+        STAGED_NAME=$(printf '%06d.dcm' "${FILE_COUNT}")
+        CONTAINER_DICOM="/dicom/${DICOM_FILE#${DICOM_ROOT}/}"
+
+        ln -s "${CONTAINER_DICOM}" "${TMP_SES}/${STAGED_NAME}"
+    done < <(
+        find "${SES_PATH}" \
+            -type f \
+            ! -name '.*' \
+            -print0 |
+            sort -z
+    )
+
+    if ((FILE_COUNT == 0)); then
+        echo "Warning: No DICOM files found; skipping ${SES_PATH}" >&2
         rm -rf "${TMP_ROOT}"
         continue
     fi
 
-    echo "  Real DICOM files   : ${file_count}"
+    echo "DICOM files   : ${FILE_COUNT}"
 
     apptainer exec \
-      -B "${DICOM_ROOT}:/dicom:ro" \
-      -B "${TMP_ROOT}:/heudiconv_input:ro" \
-      -B "${BIDS_ROOT}:/bids" \
-      -B "${HEURISTIC}:/heuristic.py:ro" \
-      "${HEUDICONV_SIF}" \
-      heudiconv \
-        -d '/heudiconv_input/{subject}/ses-{session}/*' \
-        -s "${SUBJ}" \
-        -ss "${SES_CLEAN}" \
-        -f /heuristic.py \
-        -c dcm2niix \
-        -b \
-        -o /bids \
-        --overwrite
-
-    fix_double_session_prefixes "${BIDS_ROOT}" "${SUBJ}" "${SES_CLEAN}"
+        -B "${DICOM_ROOT}:/dicom:ro" \
+        -B "${TMP_ROOT}:/heudiconv_input:ro" \
+        -B "${BIDS_ROOT}:/bids" \
+        -B "${HEURISTIC}:/heuristic.py:ro" \
+        "${HEUDICONV_SIF}" \
+        heudiconv \
+            -d '/heudiconv_input/{subject}/{session}/*' \
+            -s "${SUBJ}" \
+            -ss "${SES}" \
+            -f /heuristic.py \
+            -c dcm2niix \
+            -b \
+            -o /bids \
+            --overwrite
 
     rm -rf "${TMP_ROOT}"
 done
