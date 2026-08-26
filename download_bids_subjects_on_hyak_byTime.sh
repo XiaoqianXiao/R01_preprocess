@@ -95,6 +95,7 @@ export PYTHONNOUSERSITE=1
 export PYTHONPATH="${FLYWHEEL_SDK_TARGET}${PYTHONPATH:+:${PYTHONPATH}}"
 
 normalize_flywheel_key() {
+    FW_KEY="$(printf '%s' "${FW_KEY}" | tr -d '[:space:]')"
     FW_KEY="${FW_KEY#https://}"
     FW_KEY="${FW_KEY#http://}"
 
@@ -113,6 +114,7 @@ MSG
             exit 1
         fi
 
+        FW_HOST="$(printf '%s' "${FW_HOST}" | tr -d '[:space:]')"
         FW_HOST="${FW_HOST#https://}"
         FW_HOST="${FW_HOST#http://}"
         FW_HOST="${FW_HOST%%/*}"
