@@ -72,6 +72,7 @@ fi
 
 apptainer exec \
     --env FW_KEY="${FW_KEY}" \
+    --env FW_HOST="${FW_HOST:-}" \
     -B "${BIND_SRC}:${BIND_DEST}" \
     "${IMAGE}" \
     bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" "${INSTALL_SDK}" "${EXTRACT_AFTER}" "${KEEP_TARS}" "${RUN_FW_LOGIN}" "${DOWNLOAD_MODE}" <<'CONTAINER_SCRIPT'
@@ -92,6 +93,36 @@ DOWNLOAD_MODE="${11}"
 FLYWHEEL_SDK_TARGET="${FLYWHEEL_SDK_TARGET:-${BIND_DEST}/.flywheel-sdk-python}"
 export PYTHONNOUSERSITE=1
 export PYTHONPATH="${FLYWHEEL_SDK_TARGET}${PYTHONPATH:+:${PYTHONPATH}}"
+
+normalize_flywheel_key() {
+    FW_KEY="${FW_KEY#https://}"
+    FW_KEY="${FW_KEY#http://}"
+
+    if [[ "${FW_KEY}" != *:* ]]; then
+        if [[ -z "${FW_HOST:-}" ]]; then
+            cat >&2 <<MSG
+Error: FW_KEY is not in Flywheel SDK format.
+
+Set either:
+  export FW_KEY="uw-chn.flywheel.io:YOUR_API_KEY"
+
+or, if you only copied the token portion:
+  export FW_HOST="uw-chn.flywheel.io"
+  export FW_KEY="YOUR_API_KEY"
+MSG
+            exit 1
+        fi
+
+        FW_HOST="${FW_HOST#https://}"
+        FW_HOST="${FW_HOST#http://}"
+        FW_HOST="${FW_HOST%%/*}"
+        FW_KEY="${FW_HOST}:${FW_KEY}"
+    fi
+
+    export FW_KEY
+}
+
+normalize_flywheel_key
 
 check_flywheel_sdk() {
     python3 - <<'PY'

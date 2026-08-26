@@ -50,8 +50,13 @@ Download raw DICOM sessions from Flywheel by session scan date on Hyak.
 
 **Usage:**
 ```bash
-# Set your Flywheel API key for the current shell session
+# Set your Flywheel API key for the current shell session.
+# The SDK expects host:key format.
 export FW_KEY="uw-chn.flywheel.io:YOUR_API_KEY"
+
+# Or, if you only copied the token portion:
+export FW_HOST="uw-chn.flywheel.io"
+export FW_KEY="YOUR_API_KEY"
 
 # Preview sessions with session.timestamp on or after START_DATE.
 # This writes a manifest only; no data are downloaded.
