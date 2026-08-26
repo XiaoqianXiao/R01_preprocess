@@ -91,13 +91,39 @@ KEEP_TARS="$9"
 RUN_FW_LOGIN="${10}"
 DOWNLOAD_MODE="${11}"
 
-if ! python3 -c 'import flywheel' >/dev/null 2>&1; then
+USER_SITE="$(python3 -c 'import site; print(site.getusersitepackages())')"
+export PYTHONPATH="${USER_SITE}${PYTHONPATH:+:${PYTHONPATH}}"
+
+check_flywheel_sdk() {
+    python3 - <<'PY'
+import sys
+
+try:
+    import flywheel
+except Exception as exc:
+    print(f"Flywheel Python SDK import failed: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+
+if not hasattr(flywheel, "Client"):
+    print(
+        "Imported a flywheel module without flywheel.Client. "
+        "This is usually the wrong package or an old SDK.",
+        file=sys.stderr,
+    )
+    print(f"flywheel module path: {getattr(flywheel, '__file__', '<unknown>')}", file=sys.stderr)
+    print(f"flywheel version: {getattr(flywheel, '__version__', '<unknown>')}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+}
+
+if ! check_flywheel_sdk; then
     if [[ "${INSTALL_SDK}" == "1" ]]; then
-        echo "Flywheel Python SDK is missing; installing flywheel-sdk into ${PYTHONUSERBASE}."
-        python3 -m pip install --user flywheel-sdk
+        echo "Flywheel Python SDK is missing or incompatible; installing/upgrading flywheel-sdk into ${PYTHONUSERBASE}."
+        python3 -m pip install --user --upgrade flywheel-sdk
+        check_flywheel_sdk
     else
         cat >&2 <<MSG
-Error: The Flywheel Python SDK is not installed in this Apptainer image.
+Error: The Flywheel Python SDK is not installed or does not expose flywheel.Client in this Apptainer image.
 
 The fw CLI can download data, but it cannot filter sessions by timestamp.
 This script needs the Python SDK only for the date query step.
@@ -119,6 +145,13 @@ import os
 import sys
 
 import flywheel
+
+if not hasattr(flywheel, "Client"):
+    raise RuntimeError(
+        "Imported flywheel module does not expose Client. "
+        f"module={getattr(flywheel, '__file__', '<unknown>')} "
+        f"version={getattr(flywheel, '__version__', '<unknown>')}"
+    )
 
 start_date, manifest, project_path = sys.argv[1:4]
 start_day = date.fromisoformat(start_date)
@@ -207,6 +240,13 @@ import sys
 
 import flywheel
 
+if not hasattr(flywheel, "Client"):
+    raise RuntimeError(
+        "Imported flywheel module does not expose Client. "
+        f"module={getattr(flywheel, '__file__', '<unknown>')} "
+        f"version={getattr(flywheel, '__version__', '<unknown>')}"
+    )
+
 acquisition_id, file_name, out_path, expected_size, rel_path = sys.argv[1:6]
 expected_size = int(expected_size) if expected_size else None
 
@@ -246,6 +286,13 @@ import re
 import sys
 
 import flywheel
+
+if not hasattr(flywheel, "Client"):
+    raise RuntimeError(
+        "Imported flywheel module does not expose Client. "
+        f"module={getattr(flywheel, '__file__', '<unknown>')} "
+        f"version={getattr(flywheel, '__version__', '<unknown>')}"
+    )
 
 manifest, bind_dest = sys.argv[1:3]
 fw = flywheel.Client(os.environ["FW_KEY"])
