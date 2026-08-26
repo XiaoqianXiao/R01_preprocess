@@ -87,7 +87,7 @@ PROJECT_PATH="fang-lab/IFOCUS" BIND_SRC="/gscratch/fang/IFOCUS/sourcedata/MRI" b
 
 **Notes:**
 - `fw sync --include` filters file types, not dates. This script queries sessions by date first, then downloads the matched sessions.
-- If the Apptainer image does not include the Flywheel Python SDK, the script installs `flywheel-sdk` under `/DATA_DIR/.python-userbase`.
+- If the Apptainer image does not include the Flywheel Python SDK, the script installs an isolated `flywheel-sdk` copy under `/DATA_DIR/.flywheel-sdk-python`.
 - The default `DOWNLOAD_MODE=files` avoids `fw download` because the CLI tar workflow can be killed by Hyak/Apptainer.
 - File downloads are run as short per-file Python SDK processes, so reruns skip completed files and retry killed partial files.
 - `DOWNLOAD_MODE=tar` skips `fw login` by default because that step can be killed by Hyak/Apptainer squashfuse cleanup; set `RUN_FW_LOGIN=1` only if tar downloads fail with an authentication error.

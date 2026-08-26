@@ -10,7 +10,7 @@ set -euo pipefail
 #   EXTRACT_AFTER=1 KEEP_TARS=1 LIST_ONLY=0 ./download_bids_subjects_on_hyak_byTime.sh
 #
 # If the Apptainer image does not already include the Flywheel Python SDK,
-# this script installs it under /DATA_DIR/.python-userbase by default.
+# this script installs an isolated copy under /DATA_DIR/.flywheel-sdk-python.
 # Set INSTALL_SDK=0 to fail instead of installing.
 # Set RUN_FW_LOGIN=1 only if fw download reports an authentication error.
 #
@@ -30,7 +30,6 @@ LIST_ONLY="${LIST_ONLY:-1}"
 JOBS="${JOBS:-1}"
 MANIFEST="${MANIFEST:-${BIND_DEST}/sessions_since_${START_DATE}.csv}"
 INSTALL_SDK="${INSTALL_SDK:-1}"
-PYTHONUSERBASE="${PYTHONUSERBASE:-${BIND_DEST}/.python-userbase}"
 EXTRACT_AFTER="${EXTRACT_AFTER:-1}"
 KEEP_TARS="${KEEP_TARS:-1}"
 RUN_FW_LOGIN="${RUN_FW_LOGIN:-0}"
@@ -73,7 +72,6 @@ fi
 
 apptainer exec \
     --env FW_KEY="${FW_KEY}" \
-    --env PYTHONUSERBASE="${PYTHONUSERBASE}" \
     -B "${BIND_SRC}:${BIND_DEST}" \
     "${IMAGE}" \
     bash -s -- "${START_DATE}" "${LIST_ONLY}" "${MANIFEST}" "${PROJECT_PATH}" "${BIND_DEST}" "${JOBS}" "${INSTALL_SDK}" "${EXTRACT_AFTER}" "${KEEP_TARS}" "${RUN_FW_LOGIN}" "${DOWNLOAD_MODE}" <<'CONTAINER_SCRIPT'
@@ -91,8 +89,9 @@ KEEP_TARS="$9"
 RUN_FW_LOGIN="${10}"
 DOWNLOAD_MODE="${11}"
 
-USER_SITE="$(python3 -c 'import site; print(site.getusersitepackages())')"
-export PYTHONPATH="${USER_SITE}${PYTHONPATH:+:${PYTHONPATH}}"
+FLYWHEEL_SDK_TARGET="${FLYWHEEL_SDK_TARGET:-${BIND_DEST}/.flywheel-sdk-python}"
+export PYTHONNOUSERSITE=1
+export PYTHONPATH="${FLYWHEEL_SDK_TARGET}${PYTHONPATH:+:${PYTHONPATH}}"
 
 check_flywheel_sdk() {
     python3 - <<'PY'
@@ -118,8 +117,9 @@ PY
 
 if ! check_flywheel_sdk; then
     if [[ "${INSTALL_SDK}" == "1" ]]; then
-        echo "Flywheel Python SDK is missing or incompatible; installing/upgrading flywheel-sdk into ${PYTHONUSERBASE}."
-        python3 -m pip install --user --upgrade flywheel-sdk
+        echo "Flywheel Python SDK is missing or incompatible; installing/upgrading flywheel-sdk into ${FLYWHEEL_SDK_TARGET}."
+        mkdir -p "${FLYWHEEL_SDK_TARGET}"
+        python3 -m pip install --target "${FLYWHEEL_SDK_TARGET}" --upgrade --ignore-installed flywheel-sdk
         check_flywheel_sdk
     else
         cat >&2 <<MSG
@@ -131,8 +131,8 @@ This script needs the Python SDK only for the date query step.
 Rerun with:
   INSTALL_SDK=1 START_DATE=${START_DATE} LIST_ONLY=${LIST_ONLY} bash download_bids_subjects_on_hyak_byTime.sh
 
-The SDK will be installed under:
-  ${PYTHONUSERBASE}
+The SDK would be installed under:
+  ${FLYWHEEL_SDK_TARGET}
 MSG
         exit 1
     fi
