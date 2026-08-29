@@ -14,7 +14,7 @@ set -euo pipefail
 
 # --- Configuration ---
 HEUDICONV_SIF=/gscratch/fang/images/heudiconv.sif
-HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess/heuristic_reproin_like.py
+HEURISTIC=/gscratch/scrubbed/fanglab/xiaoqian/repo/R01_preprocess_NDA/heuristic_reproin_like.py
 
 DICOM_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/dicom
 BIDS_ROOT=/gscratch/scrubbed/fanglab/xiaoqian/IFOCUS/sourcedata/nii

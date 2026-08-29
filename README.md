@@ -102,10 +102,24 @@ PROJECT_PATH="fang-lab/IFOCUS" BIND_SRC="/gscratch/fang/IFOCUS/sourcedata/MRI" b
 
 Convert raw DICOM files to BIDS-compliant NIfTI format using heudiconv.
 
+If Flywheel downloads DICOM packages as `*.dicom.zip` files, unzip them before
+running heudiconv:
+
+```bash
+bash unzip.sh
+```
+
+The unzip step extracts each `*.dicom.zip` file into the same acquisition
+directory and keeps the original zip file. The conversion job expects extracted
+DICOM files under each subject/session directory.
+
 **Script:** `submit_dicom_to_nii.sh` (wraps `heudiconv_job.sbatch`)
 
 **Usage:**
 ```bash
+# First unzip Flywheel DICOM packages, if present
+bash unzip.sh
+
 # Process all subjects
 ./submit_dicom_to_nii.sh
 
@@ -119,7 +133,7 @@ sbatch --export=ALL,TARGET_SUB="sub-001",TARGET_SES="ses-01" heudiconv_job.sbatc
 **What it does:**
 - Scans the DICOM directory for all subjects
 - Submits a job array (one job per subject)
-- Stages each session's real DICOM files into `$SLURM_TMPDIR` as neutral `*.dcm` symlinks before conversion, so Flywheel package directories such as `*.dicom/` and misleading filenames such as `*.dicom.zip` are not passed to heudiconv as directories or archives
+- Stages each session's files into `$SLURM_TMPDIR` as neutral `*.dcm` symlinks before conversion
 - Uses `heuristic_reproin_like.py` for BIDS conversion
 - Outputs to `sourcedata/nii/` in BIDS format
 
@@ -391,7 +405,7 @@ Many scripts support processing specific subjects or sessions. Here's a summary:
 
 - **`verify_freesurfer.sh`** – Additional FreeSurfer verification (if available)
 
-- **`unzip.sh`** – Unzip compressed files (if needed)
+- **`unzip.sh`** – Extract Flywheel `*.dicom.zip` files before DICOM-to-NIfTI conversion
 
 ## Troubleshooting
 

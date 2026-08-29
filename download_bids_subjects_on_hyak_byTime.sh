@@ -379,6 +379,7 @@ for row in rows:
                 sys.stdout.buffer.write(value.encode())
                 sys.stdout.buffer.write(b"\0")
 PY
+    echo "download successfully"
     exit 0
 fi
 
@@ -468,4 +469,5 @@ with open(manifest, newline="") as f:
             sys.stdout.buffer.write(extract_dir.encode())
             sys.stdout.buffer.write(b"\0")
 PY
+echo "download successfully"
 CONTAINER_SCRIPT
